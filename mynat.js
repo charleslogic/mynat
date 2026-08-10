@@ -53,6 +53,7 @@ function initTabs() {
       });
       // Search/filter bar is shared by Map + List, hidden on Overview.
       document.getElementById('filterbar').style.display = tab === 'overview' ? 'none' : 'flex';
+      if (tab === 'list') loadObservations(true);
     });
   });
 }
@@ -75,9 +76,34 @@ function initUserMenu(user) {
   });
 }
 
-function initCategoryChips() {
+// Shared by Detail List (this phase) and eventually Map (Phase 5) — filter
+// state lives here so a future Map tab can reuse the same search/category
+// inputs without duplicating the wiring.
+let _listSearch = '';
+let _listCategories = [];
+
+function isListActive() {
+  return document.getElementById('tab-list').classList.contains('active');
+}
+
+function initFilterBar() {
+  const searchInput = document.getElementById('search-input');
+  let debounceTimer;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      _listSearch = searchInput.value.trim();
+      if (isListActive()) loadObservations(true);
+    }, 300);
+  });
+
   document.querySelectorAll('.chip[data-category]').forEach(chip => {
-    chip.addEventListener('click', () => chip.classList.toggle('active'));
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('active');
+      _listCategories = [...document.querySelectorAll('.chip[data-category].active')]
+        .map(c => c.dataset.category);
+      if (isListActive()) loadObservations(true);
+    });
   });
 }
 
@@ -273,12 +299,136 @@ function initSyncFlow() {
   btn.addEventListener('click', () => runSync());
 }
 
+// Built via DOM APIs (not innerHTML) since common_name/scientific_name/
+// place_guess come from other iNat users' free-text data, not just the
+// signed-in user's own — textContent/attribute assignment keeps that safe
+// without having to hand-escape every field.
+function buildObsCard(obs) {
+  const meta = ICONIC_TAXA[obs.iconic_taxon] || ICONIC_TAXA.Unknown;
+  const name = obs.common_name || obs.scientific_name || 'Unknown';
+  const metaParts = [obs.observed_on ? formatDate(obs.observed_on) : 'Undated'];
+  if (obs.place_guess) metaParts.push(obs.place_guess);
+
+  const card = document.createElement('a');
+  card.className = 'obs-card';
+  card.href = `https://www.inaturalist.org/observations/${obs.inat_id}`;
+  card.target = '_blank';
+  card.rel = 'noopener';
+
+  const thumbUrl = obs.photos?.[0]?.square;
+  if (thumbUrl) {
+    const img = document.createElement('img');
+    img.className = 'obs-thumb';
+    img.src = thumbUrl;
+    img.alt = '';
+    img.loading = 'lazy';
+    card.appendChild(img);
+  } else {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'obs-thumb placeholder';
+    placeholder.textContent = '🌿';
+    card.appendChild(placeholder);
+  }
+
+  const info = document.createElement('div');
+  info.className = 'obs-info';
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'obs-name';
+  nameEl.textContent = name;
+  info.appendChild(nameEl);
+
+  if (obs.scientific_name && obs.common_name) {
+    const sciEl = document.createElement('div');
+    sciEl.className = 'obs-sci';
+    sciEl.textContent = obs.scientific_name;
+    info.appendChild(sciEl);
+  }
+
+  const metaRow = document.createElement('div');
+  metaRow.className = 'obs-meta-row';
+  const dot = document.createElement('span');
+  dot.className = 'obs-dot';
+  dot.style.background = meta.color;
+  metaRow.appendChild(dot);
+  metaRow.appendChild(document.createTextNode(metaParts.join(' · ')));
+  info.appendChild(metaRow);
+
+  card.appendChild(info);
+  return card;
+}
+
+let _listOffset = 0;
+let _listLoading = false;
+
+async function loadObservations(reset) {
+  if (_listLoading) return;
+  _listLoading = true;
+
+  const listEl = document.getElementById('obs-list');
+  const emptyEl = document.getElementById('list-empty');
+  const metaEl = document.getElementById('list-meta');
+  const loadMoreBtn = document.getElementById('list-load-more-btn');
+
+  if (reset) {
+    _listOffset = 0;
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'none';
+    metaEl.textContent = 'Loading…';
+  }
+  if (loadMoreBtn) { loadMoreBtn.disabled = true; loadMoreBtn.textContent = 'Loading…'; }
+
+  const result = await apiFetch('observations', {
+    method: 'POST',
+    body: JSON.stringify({ search: _listSearch, categories: _listCategories, offset: _listOffset }),
+  });
+
+  _listLoading = false;
+
+  if (!result.ok) {
+    metaEl.textContent = `Couldn't load observations: ${result.error || 'unknown error'}`;
+    if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  result.observations.forEach(obs => frag.appendChild(buildObsCard(obs)));
+  listEl.appendChild(frag);
+
+  _listOffset = result.nextOffset;
+
+  const hasFilters = Boolean(_listSearch) || _listCategories.length > 0;
+  if (result.total === 0) {
+    emptyEl.style.display = '';
+    document.getElementById('list-empty-text').textContent = hasFilters
+      ? 'No observations match your filters.'
+      : 'No observations yet — connect and sync from the Overview tab.';
+    metaEl.textContent = '';
+  } else {
+    emptyEl.style.display = 'none';
+    metaEl.textContent = `${result.total.toLocaleString()} observation${result.total === 1 ? '' : 's'}${hasFilters ? ' matched' : ''}`;
+  }
+
+  if (loadMoreBtn) {
+    loadMoreBtn.style.display = result.hasMore ? '' : 'none';
+    loadMoreBtn.disabled = false;
+    loadMoreBtn.textContent = 'Load more';
+  }
+}
+
+function initListLoadMore() {
+  const btn = document.getElementById('list-load-more-btn');
+  if (!btn) return;
+  btn.addEventListener('click', () => loadObservations(false));
+}
+
 window._bootApp = function (user) {
   initTabs();
   initUserMenu(user);
-  initCategoryChips();
+  initFilterBar();
   initConnectFlow();
   initSyncFlow();
   initStatsToggle();
+  initListLoadMore();
   loadProfile();
 };

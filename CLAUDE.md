@@ -126,6 +126,7 @@ on all operations. `mynat_category_shortcuts`: `select` open to `authenticated`,
 | `link-inat` | POST | `{username}` — resolves against iNat's `/v1/users/autocomplete` (exact login match only, fuzzy results rejected), upserts `mynat_profiles`. Re-running with a new username re-links the account. |
 | `sync` | POST | `{page}` (default 1) — imports/updates observations for the connected iNat account. See Sync Engine below. |
 | `stats` | GET | `{total, speciesCount, earliest, latest, categories}` aggregated from `mynat_observations`. See Overview Stats below. |
+| `observations` | POST | `{search, categories, offset}` — paginated (30/page), `observed_on desc` list. See Detail List below. |
 
 ## Sync Engine
 
@@ -204,10 +205,43 @@ is fine" after the v1→v2 migration. `index.html`'s SW registration now listens
 `controllerchange` and reloads once automatically (guarded by a `refreshing` flag against
 looping), so a deploy never needs more than the normal reload going forward.
 
+## Detail List
+
+The `observations` action (`api/index.js`) queries `mynat_observations` directly —
+`observed_on desc` with `inat_id desc` as a stable tiebreaker (needed because many observations
+share the same date, and `.range()` offset pagination needs a fully deterministic order to avoid
+skipping/repeating rows across pages), 30 per page, `count: 'exact'` so the client knows
+`hasMore`.
+
+**Filtering:** `categories` (from the shared filter-bar chips, see below) is a plain
+`.in('iconic_taxon', categories)` — safe, `.in()` is parameterized by supabase-js. `search`
+matches `common_name`/`scientific_name` via `ILIKE '%…%'` rather than the `idx_mynat_obs_search`
+tsvector GIN index the schema originally provisioned for this — full-text `tsquery` syntax is
+less forgiving for a plain type-and-filter box, and ILIKE is fast enough at personal scale.
+Before building the `.or()` filter expression, the search string has `,()` stripped (PostgREST's
+`or=` syntax treats those as structural — left raw, a crafted search string could inject
+additional filter clauses) and `%_\` escaped (ILIKE wildcards). RLS still bounds every query to
+the caller's own rows regardless, but this keeps the query itself well-formed. All three
+sanitization/filter paths verified against the live `@mr-natural` account before deploying
+(single-category count matched the Overview breakdown exactly; two categories summed correctly;
+a comma-and-parens search string returned zero results instead of erroring).
+
+**Shared filter state** (`mynat.js: _listSearch`/`_listCategories`, wired in `initFilterBar`):
+lives outside any one tab's code so Phase 5's Map can reuse the same search input and category
+chips without duplicating the wiring. Search is debounced 300ms; category chips are multi-select
+(OR within categories, matching the plan's "view birds+mammals together" intent) and reload
+immediately on click. Both only trigger a reload if the List tab is currently active — changing
+filters while on Overview just updates the pending state silently.
+
+**Cards** (`mynat.js: buildObsCard`) are built with `document.createElement`/`.textContent`, not
+`innerHTML` string interpolation — `common_name`, `scientific_name`, and `place_guess` are other
+iNat users' free-text data, not just the signed-in user's own, so this isn't optional. Each card
+links out to the observation's real iNat page (`inaturalist.org/observations/{inat_id}`).
+
 ## Build Status
 
-Phase 0 (scaffolding), Phase 1 (schema + auth linking), Phase 2 (sync engine), and Phase 3
-(Overview stats) complete. Live at https://mynat.charleslogic.com/. Overview tab connects an
-account, runs the initial import, and shows real counts/species/date-range/category-breakdown
-stats. Map/List tabs are still empty-state placeholders — Phase 4 (Detail List) and Phase 5
-(Map), both reading `mynat_observations` directly, haven't been built yet.
+Phase 0 (scaffolding) through Phase 4 (Detail List) complete. Live at
+https://mynat.charleslogic.com/. Overview tab connects an account, runs the initial import, and
+shows real stats; Detail List shows the real observation history with working search/category
+filtering and pagination. Map tab is still an empty-state placeholder — Phase 5, reusing the
+same filter state as List, hasn't been built yet.

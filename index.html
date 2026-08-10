@@ -139,11 +139,13 @@
     </div>
 
     <div class="tabpanel" id="tab-list">
-      <div class="empty-state">
-        <div class="es-icon">📋</div>
-        <h2>Detail list</h2>
-        <p>Not built yet (Phase 4). Once it is, a date-descending list of your observations, filterable by category and search text, will appear here.</p>
+      <div class="list-meta" id="list-meta"></div>
+      <div class="obs-list" id="obs-list"></div>
+      <div class="empty-state" id="list-empty" style="display:none">
+        <div class="es-icon">🔍</div>
+        <p id="list-empty-text"></p>
       </div>
+      <button class="btn-primary" id="list-load-more-btn" style="display:none">Load more</button>
     </div>
   </div>
 
