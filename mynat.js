@@ -54,6 +54,11 @@ function initTabs() {
       // Search/filter bar is shared by Map + List, hidden on Overview.
       document.getElementById('filterbar').style.display = tab === 'overview' ? 'none' : 'flex';
       if (tab === 'list') loadObservations(true);
+      if (tab === 'map') {
+        initMap();
+        setTimeout(() => _map.invalidateSize(), 0);
+        loadMapPoints();
+      }
     });
   });
 }
@@ -86,6 +91,11 @@ function isListActive() {
   return document.getElementById('tab-list').classList.contains('active');
 }
 
+function onFiltersChanged() {
+  if (isListActive()) loadObservations(true);
+  if (isMapActive()) loadMapPoints();
+}
+
 function initFilterBar() {
   const searchInput = document.getElementById('search-input');
   let debounceTimer;
@@ -93,7 +103,7 @@ function initFilterBar() {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       _listSearch = searchInput.value.trim();
-      if (isListActive()) loadObservations(true);
+      onFiltersChanged();
     }, 300);
   });
 
@@ -102,7 +112,7 @@ function initFilterBar() {
       chip.classList.toggle('active');
       _listCategories = [...document.querySelectorAll('.chip[data-category].active')]
         .map(c => c.dataset.category);
-      if (isListActive()) loadObservations(true);
+      onFiltersChanged();
     });
   });
 }
@@ -422,6 +432,159 @@ function initListLoadMore() {
   btn.addEventListener('click', () => loadObservations(false));
 }
 
+// ── Map tab ────────────────────────────────────────────────────────────
+let _map = null;
+let _clusterGroup = null;
+let _flatGroup = null;
+let _mapClustered = true;
+let _mapLoading = false;
+
+function isMapActive() {
+  return document.getElementById('tab-map').classList.contains('active');
+}
+
+function taxonMarkerIcon(iconicTaxon) {
+  const meta = ICONIC_TAXA[iconicTaxon] || ICONIC_TAXA.Unknown;
+  return L.divIcon({
+    className: 'obs-marker',
+    html: `<span style="background:${meta.color}"></span>`,
+    iconSize: [14, 14],
+  });
+}
+
+// Built via DOM APIs, same reasoning as buildObsCard — this is other iNat
+// users' free-text data, not just the signed-in user's own.
+function buildMapPopup(point) {
+  const wrap = document.createElement('div');
+  wrap.className = 'map-popup';
+
+  if (point.thumb) {
+    const img = document.createElement('img');
+    img.className = 'map-popup-thumb';
+    img.src = point.thumb;
+    img.alt = '';
+    wrap.appendChild(img);
+  }
+
+  const name = document.createElement('div');
+  name.className = 'map-popup-name';
+  name.textContent = point.common_name || point.scientific_name || 'Unknown';
+  wrap.appendChild(name);
+
+  if (point.scientific_name && point.common_name) {
+    const sci = document.createElement('div');
+    sci.className = 'map-popup-sci';
+    sci.textContent = point.scientific_name;
+    wrap.appendChild(sci);
+  }
+
+  if (point.observed_on) {
+    const date = document.createElement('div');
+    date.className = 'map-popup-date';
+    date.textContent = formatDate(point.observed_on);
+    wrap.appendChild(date);
+  }
+
+  const link = document.createElement('a');
+  link.className = 'map-popup-link';
+  link.href = `https://www.inaturalist.org/observations/${point.inat_id}`;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = 'View on iNaturalist →';
+  wrap.appendChild(link);
+
+  return wrap;
+}
+
+function initMap() {
+  if (_map) return;
+  _map = L.map('map-canvas', { zoomControl: true }).setView([20, 0], 2);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    maxZoom: 19,
+  }).addTo(_map);
+
+  _clusterGroup = L.markerClusterGroup();
+  _flatGroup = L.layerGroup();
+  _clusterGroup.addTo(_map); // clustered is the default view
+
+  // Leaflet reads the container's size synchronously at construction time;
+  // this is cheap insurance against the classic "gray tiles" bug if the tab
+  // panel's display:flex hasn't fully taken effect yet in some browser.
+  setTimeout(() => _map.invalidateSize(), 0);
+}
+
+// Cluster and individual views need their own separate marker instances —
+// Leaflet.markercluster mutates markers it manages (position/visibility) to
+// draw clusters, so sharing one instance between MarkerClusterGroup and a
+// plain LayerGroup would let clustering effects leak into the flat view.
+function renderMapMarkers(points) {
+  _clusterGroup.clearLayers();
+  _flatGroup.clearLayers();
+
+  for (const point of points) {
+    const latlng = [point.latitude, point.longitude];
+    const icon = taxonMarkerIcon(point.iconic_taxon);
+
+    const clusterMarker = L.marker(latlng, { icon });
+    clusterMarker.bindPopup(() => buildMapPopup(point));
+    _clusterGroup.addLayer(clusterMarker);
+
+    const flatMarker = L.marker(latlng, { icon: taxonMarkerIcon(point.iconic_taxon) });
+    flatMarker.bindPopup(() => buildMapPopup(point));
+    _flatGroup.addLayer(flatMarker);
+  }
+
+  const activeGroup = _mapClustered ? _clusterGroup : _flatGroup;
+  const bounds = points.length && activeGroup.getBounds();
+  if (bounds && bounds.isValid()) {
+    _map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
+  }
+}
+
+async function loadMapPoints() {
+  if (_mapLoading) return;
+  _mapLoading = true;
+  document.getElementById('map-meta').textContent = 'Loading…';
+
+  const result = await apiFetch('map', {
+    method: 'POST',
+    body: JSON.stringify({ search: _listSearch, categories: _listCategories }),
+  });
+
+  _mapLoading = false;
+
+  if (!result.ok) {
+    document.getElementById('map-meta').textContent = `Couldn't load map: ${result.error || 'unknown error'}`;
+    return;
+  }
+
+  renderMapMarkers(result.points);
+
+  const hasFilters = Boolean(_listSearch) || _listCategories.length > 0;
+  const metaEl = document.getElementById('map-meta');
+  if (result.points.length === 0) {
+    metaEl.textContent = hasFilters
+      ? 'No observations match your filters.'
+      : 'No mapped observations yet — connect and sync from the Overview tab.';
+  } else {
+    metaEl.textContent = `${result.points.length.toLocaleString()} mapped observation${result.points.length === 1 ? '' : 's'}${hasFilters ? ' matched' : ''}`;
+  }
+}
+
+function initMapClusterToggle() {
+  const btn = document.getElementById('map-cluster-toggle');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    _mapClustered = !_mapClustered;
+    btn.textContent = _mapClustered ? 'Clustered' : 'Individual';
+    btn.classList.toggle('active', _mapClustered);
+
+    _map.removeLayer(_mapClustered ? _flatGroup : _clusterGroup);
+    _map.addLayer(_mapClustered ? _clusterGroup : _flatGroup);
+  });
+}
+
 window._bootApp = function (user) {
   initTabs();
   initUserMenu(user);
@@ -430,5 +593,6 @@ window._bootApp = function (user) {
   initSyncFlow();
   initStatsToggle();
   initListLoadMore();
+  initMapClusterToggle();
   loadProfile();
 };

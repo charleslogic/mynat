@@ -545,3 +545,53 @@ html, body {
 }
 
 #list-load-more-btn { display: block; margin: 20px auto; }
+
+/* ── Map tab ── */
+.tabpanel#tab-map { padding: 12px; display: none; flex-direction: column; }
+.tabpanel#tab-map.active { display: flex; }
+
+.map-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 6px 10px;
+}
+
+.map-meta { font-size: .8rem; color: var(--muted); }
+
+#map-canvas {
+  flex: 1;
+  min-height: 420px;
+  border-radius: var(--r);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--card2);
+}
+
+/* Colored-dot marker icon, built as an L.divIcon so Leaflet.markercluster
+   (which only clusters L.Marker-like layers, not vector Paths like
+   circleMarker) can still cluster it. */
+.obs-marker span {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
+}
+
+.map-popup { min-width: 160px; max-width: 220px; }
+.map-popup-thumb {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  display: block;
+}
+.map-popup-name { font-weight: 700; font-size: .88rem; margin-bottom: 2px; }
+.map-popup-sci { font-style: italic; font-size: .78rem; color: #666; margin-bottom: 4px; }
+.map-popup-date { font-size: .76rem; color: #888; margin-bottom: 6px; }
+.map-popup-link { font-size: .78rem; color: var(--accent); text-decoration: none; font-weight: 600; }
+.map-popup-link:hover { text-decoration: underline; }

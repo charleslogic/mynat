@@ -127,6 +127,7 @@ on all operations. `mynat_category_shortcuts`: `select` open to `authenticated`,
 | `sync` | POST | `{page}` (default 1) — imports/updates observations for the connected iNat account. See Sync Engine below. |
 | `stats` | GET | `{total, speciesCount, earliest, latest, categories}` aggregated from `mynat_observations`. See Overview Stats below. |
 | `observations` | POST | `{search, categories, offset}` — paginated (30/page), `observed_on desc` list. See Detail List below. |
+| `map` | POST | `{search, categories}` — all matching lat/lng points (unpaginated to the client; paged past PostgREST's 1000-row cap server-side). See Map below. |
 
 ## Sync Engine
 
@@ -227,21 +228,59 @@ sanitization/filter paths verified against the live `@mr-natural` account before
 a comma-and-parens search string returned zero results instead of erroring).
 
 **Shared filter state** (`mynat.js: _listSearch`/`_listCategories`, wired in `initFilterBar`):
-lives outside any one tab's code so Phase 5's Map can reuse the same search input and category
-chips without duplicating the wiring. Search is debounced 300ms; category chips are multi-select
-(OR within categories, matching the plan's "view birds+mammals together" intent) and reload
-immediately on click. Both only trigger a reload if the List tab is currently active — changing
-filters while on Overview just updates the pending state silently.
+lives outside any one tab's code so Map (Phase 5) reuses the same search input and category
+chips without duplicating the wiring — `onFiltersChanged()` reloads whichever of List/Map is
+currently active. Search is debounced 300ms; category chips are multi-select (OR within
+categories, matching the plan's "view birds+mammals together" intent) and reload immediately on
+click. Changing filters while on Overview just updates the pending state silently until you
+switch to List or Map.
 
 **Cards** (`mynat.js: buildObsCard`) are built with `document.createElement`/`.textContent`, not
 `innerHTML` string interpolation — `common_name`, `scientific_name`, and `place_guess` are other
 iNat users' free-text data, not just the signed-in user's own, so this isn't optional. Each card
 links out to the observation's real iNat page (`inaturalist.org/observations/{inat_id}`).
 
+## Map
+
+`api/index.js`'s `map` action returns every matching point in one response (not paginated to the
+client — a map needs the full filtered set to cluster/plot correctly) but pages past PostgREST's
+1000-row cap server-side the same way `stats` does, using the same `parseFilterInput`/
+`applyObservationFilters` helpers as `observations` so category/search filtering behaves
+identically across List and Map. Only `latitude`/`longitude` non-null rows are included (2 of
+1678 in the test account lack coordinates). The `thumb` field pulls just the square photo URL out
+of the `photos` jsonb array via a PostgREST path selector (`thumb:photos->0->>square`) instead of
+the whole array, keeping a ~1700-point response reasonably lean — verified this selector syntax
+against live data before deploying.
+
+**Leaflet init** (`mynat.js: initMap`): lazy — created on first Map-tab activation, guarded so a
+second visit doesn't re-init (Leaflet throws if you call `L.map()` on an already-initialized
+container). Tiles are CartoDB's `dark_all` basemap rather than plain OpenStreetMap (which `hab`
+uses) — matches MyNat's dark-first theme and doesn't need an API key; `nam` already established
+this as a known-good CDN option elsewhere in the suite. `invalidateSize()` runs once via
+`setTimeout(…, 0)` right after creation as cheap insurance against Leaflet reading a zero-size
+container, and again every time the tab is reactivated.
+
+**Clustering** (`mynat.js: renderMapMarkers`): builds *two* separate `L.marker` instances per
+point — one added to an `L.markerClusterGroup`, one to a plain `L.layerGroup` — rather than
+sharing a single instance between them. Leaflet.markercluster mutates the markers it manages
+(position/visibility) to draw clusters; sharing an instance would leak that into the flat
+individual-markers view. The "Clustered"/"Individual" toggle (`initMapClusterToggle`) just swaps
+which group is attached to the map — no refetch, no rebuild. Markers use a colored `L.divIcon`
+(`taxonMarkerIcon`, matching `ICONIC_TAXA`) rather than `L.circleMarker`, since markercluster only
+clusters marker-like layers, not vector paths. Popups (`buildMapPopup`) are built via DOM APIs for
+the same free-text-data reason as list cards, and passed to `bindPopup` as a factory function so
+~3350 popup subtrees (2 per point) aren't all built upfront — only on actual open.
+
+**Scaffolding gap found and fixed in this phase:** Phase 0 added the Leaflet/markercluster CDN
+`<link>` (CSS) tags and precached the JS in `sw.js`, but never actually added the `<script>` tags
+to load `leaflet.js`/`leaflet.markercluster.js` — so `L` was never defined. Added both to
+`index.html`'s `<head>`, synchronous, matching `nam`'s convention.
+
 ## Build Status
 
-Phase 0 (scaffolding) through Phase 4 (Detail List) complete. Live at
-https://mynat.charleslogic.com/. Overview tab connects an account, runs the initial import, and
-shows real stats; Detail List shows the real observation history with working search/category
-filtering and pagination. Map tab is still an empty-state placeholder — Phase 5, reusing the
-same filter state as List, hasn't been built yet.
+Phase 0 (scaffolding) through Phase 5 (Map) complete — all 5 core phases of the dev plan done.
+Live at https://mynat.charleslogic.com/. Overview connects an account and shows real stats;
+Detail List and Map both read `mynat_observations` directly through shared search/category
+filter state, with Map additionally offering a clustered/individual marker toggle. Remaining
+plan items are Phase 6 (curated category shortcuts like "Butterflies" vs "Moths") and Phase 7
+(polish — loading states, error handling, mobile responsiveness).

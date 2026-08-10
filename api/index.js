@@ -83,6 +83,33 @@ function mapObservation(obs, uid) {
     };
 }
 
+// Shared by 'observations' and 'map' — parses+caps the filter inputs, then
+// applies category/search filtering to a query builder. Search uses ILIKE
+// rather than the idx_mynat_obs_search tsvector index (full-text tsquery
+// syntax is less forgiving for a plain search-as-you-type box); the string
+// is sanitized before being interpolated into the .or() filter expression
+// since PostgREST's or= syntax treats ,() as structural — left raw, a
+// crafted search string could inject additional filter clauses.
+function parseFilterInput(body) {
+    const search = typeof body.search === 'string' ? body.search.trim().slice(0, 100) : '';
+    const categories = Array.isArray(body.categories)
+        ? body.categories.filter(c => typeof c === 'string').slice(0, 20)
+        : [];
+    return { search, categories };
+}
+
+function applyObservationFilters(query, { search, categories }) {
+    if (categories.length) query = query.in('iconic_taxon', categories);
+    if (search) {
+        const cleaned = search.replace(/[,()]/g, ' ').trim();
+        if (cleaned) {
+            const esc = cleaned.replace(/[%_\\]/g, m => `\\${m}`); // escape ILIKE wildcards
+            query = query.or(`common_name.ilike.%${esc}%,scientific_name.ilike.%${esc}%`);
+        }
+    }
+    return query;
+}
+
 module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
@@ -196,12 +223,8 @@ module.exports = async (req, res) => {
             }
 
             case 'observations': {
-                const body = req.body || {};
-                const search = typeof body.search === 'string' ? body.search.trim().slice(0, 100) : '';
-                const categories = Array.isArray(body.categories)
-                    ? body.categories.filter(c => typeof c === 'string').slice(0, 20)
-                    : [];
-                const offset = Number.isInteger(body.offset) && body.offset >= 0 ? body.offset : 0;
+                const filters = parseFilterInput(req.body || {});
+                const offset = Number.isInteger(req.body?.offset) && req.body.offset >= 0 ? req.body.offset : 0;
                 const PAGE_SIZE = 30;
 
                 let query = db
@@ -210,21 +233,7 @@ module.exports = async (req, res) => {
                     .order('observed_on', { ascending: false, nullsFirst: false })
                     .order('inat_id', { ascending: false }) // stable tiebreaker so .range() paging can't skip/repeat rows across same-day ties
                     .range(offset, offset + PAGE_SIZE - 1);
-
-                if (categories.length) query = query.in('iconic_taxon', categories);
-
-                if (search) {
-                    // PostgREST's .or() filter syntax treats , ( ) as structural — strip
-                    // them out of user input before building the expression rather than
-                    // interpolating it raw, so a search string can't inject extra filter
-                    // clauses. RLS still bounds the blast radius to this user's own rows
-                    // regardless, but this keeps the query itself well-formed.
-                    const cleaned = search.replace(/[,()]/g, ' ').trim();
-                    if (cleaned) {
-                        const esc = cleaned.replace(/[%_\\]/g, m => `\\${m}`); // escape ILIKE wildcards
-                        query = query.or(`common_name.ilike.%${esc}%,scientific_name.ilike.%${esc}%`);
-                    }
-                }
+                query = applyObservationFilters(query, filters);
 
                 const { data, error, count } = await query;
                 if (error) throw error;
@@ -236,6 +245,34 @@ module.exports = async (req, res) => {
                     nextOffset: offset + data.length,
                     hasMore: offset + data.length < count,
                 });
+            }
+
+            case 'map': {
+                const filters = parseFilterInput(req.body || {});
+                const PAGE_SIZE = 1000; // PostgREST's unbounded-select cap — page past it explicitly (see Overview Stats bug)
+                const points = [];
+                let offset = 0;
+
+                while (true) {
+                    let query = db
+                        .from('mynat_observations')
+                        // thumb: pulls just the square photo URL out of the photos jsonb
+                        // array instead of the whole array (5 URLs/row) — the map can have
+                        // ~1700+ points in one response, so this keeps payload lean.
+                        .select('inat_id, latitude, longitude, iconic_taxon, common_name, scientific_name, observed_on, thumb:photos->0->>square')
+                        .not('latitude', 'is', null)
+                        .not('longitude', 'is', null)
+                        .range(offset, offset + PAGE_SIZE - 1);
+                    query = applyObservationFilters(query, filters);
+
+                    const { data, error } = await query;
+                    if (error) throw error;
+                    points.push(...data);
+                    if (data.length < PAGE_SIZE) break;
+                    offset += PAGE_SIZE;
+                }
+
+                return res.json({ ok: true, points });
             }
 
             case 'sync': {
