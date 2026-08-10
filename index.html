@@ -99,11 +99,30 @@
           <div class="form-error" id="connect-error"></div>
         </div>
       </div>
-      <div class="empty-state" id="overview-connected" style="display:none">
-        <div class="es-icon">✅</div>
-        <h2>Connected as <span id="connected-username"></span></h2>
-        <p id="connected-sync-status"></p>
-        <div style="display:flex; flex-direction:column; gap:10px; align-items:center">
+      <div class="dashboard" id="overview-connected" style="display:none">
+        <div class="ov-header">
+          <h2>Connected as <span id="connected-username"></span></h2>
+          <div class="sync-status" id="connected-sync-status"></div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="stat-total">–</div>
+            <div class="stat-label">Observations</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-species">–</div>
+            <div class="stat-label">Species</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-daterange">–</div>
+            <div class="stat-label">Date range</div>
+          </div>
+        </div>
+
+        <div class="category-breakdown" id="category-breakdown"></div>
+
+        <div class="ov-actions">
           <button class="btn-primary" id="sync-now-btn">Sync now</button>
           <button class="cfg-link-btn" id="change-username-btn" style="width:auto">Change username</button>
         </div>
@@ -114,7 +133,7 @@
       <div class="empty-state">
         <div class="es-icon">🗺️</div>
         <h2>Map</h2>
-        <p>Once observations are synced, they'll appear here on a Leaflet map, clustered and color-coded by category.</p>
+        <p>Not built yet (Phase 5). Once it is, your synced observations will appear here on a Leaflet map, clustered and color-coded by category.</p>
       </div>
     </div>
 
@@ -122,7 +141,7 @@
       <div class="empty-state">
         <div class="es-icon">📋</div>
         <h2>Detail list</h2>
-        <p>A date-descending list of your observations, filterable by category and search text, will appear here.</p>
+        <p>Not built yet (Phase 4). Once it is, a date-descending list of your observations, filterable by category and search text, will appear here.</p>
       </div>
     </div>
   </div>

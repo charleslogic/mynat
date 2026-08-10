@@ -125,6 +125,7 @@ on all operations. `mynat_category_shortcuts`: `select` open to `authenticated`,
 | `profile` | GET | Current user's `mynat_profiles` row, or `null` if not yet connected. |
 | `link-inat` | POST | `{username}` — resolves against iNat's `/v1/users/autocomplete` (exact login match only, fuzzy results rejected), upserts `mynat_profiles`. Re-running with a new username re-links the account. |
 | `sync` | POST | `{page}` (default 1) — imports/updates observations for the connected iNat account. See Sync Engine below. |
+| `stats` | GET | `{total, speciesCount, earliest, latest, categories}` aggregated from `mynat_observations`. See Overview Stats below. |
 
 ## Sync Engine
 
@@ -156,10 +157,34 @@ swapped, no extra request needed.
 **Triggers:** automatically after a successful `link-inat` (`mynat.js: submitUsername` calls
 `runSync()`), and manually via the "Sync now" button in the connected state.
 
+## Overview Stats
+
+The `stats` action (`api/index.js`) pulls `iconic_taxon`, `observed_on`, `taxon_id` from
+`mynat_observations` and aggregates in JS — total count, distinct-species count, observed-date
+range, and a count per iconic taxon — rather than relying on PostgREST's group-by/aggregate
+syntax. Cheap at personal-observation-history scale.
+
+**Row cap bug (fixed):** PostgREST caps an unbounded `select` at 1000 rows by default. The first
+version of this action silently undercounted a 1678-observation account as 1000 — caught by
+testing against live data, not by code review. Fixed by paging explicitly with `.range()` in
+1000-row windows until a short page comes back.
+
+**13 iconic taxa, not 12:** `Animalia` is a real iNat iconic taxon (their "Other Animals"
+catch-all — worms, corals, anything not covered by the more specific buckets) and shows up in
+real data; it's easy to miss since most summaries of iNat's iconic taxa list only the 12 more
+specific ones. `mynat.js: ICONIC_TAXA` and the `--tax-*` CSS variables in `mynat.css` cover all
+13 plus an `Unknown` fallback for the null case. Also caught by testing against the live
+`@mr-natural` account, not by reading iNat's docs.
+
+**UI** (`mynat.js: renderStats`, `#overview-connected` in `index.html`): 3-stat-card grid
+(observations / species / date range) plus a horizontal bar per category, color-coded via
+`ICONIC_TAXA`, sorted by count descending. Refreshed on page load (if connected) and again after
+every `runSync()` completes.
+
 ## Build Status
 
-Phase 0 (scaffolding), Phase 1 (schema + auth linking), and Phase 2 (sync engine) complete. Live
-at https://mynat.charleslogic.com/. Overview tab connects an account, runs the initial import,
-and shows last-synced status; Map/List tabs are still empty-state placeholders — Phase 3
-(Overview aggregate stats) and Phase 4/5 (List/Map, reading `mynat_observations`) haven't been
-built yet, so nothing displays the synced data besides the running import counter.
+Phase 0 (scaffolding), Phase 1 (schema + auth linking), Phase 2 (sync engine), and Phase 3
+(Overview stats) complete. Live at https://mynat.charleslogic.com/. Overview tab connects an
+account, runs the initial import, and shows real counts/species/date-range/category-breakdown
+stats. Map/List tabs are still empty-state placeholders — Phase 4 (Detail List) and Phase 5
+(Map), both reading `mynat_observations` directly, haven't been built yet.

@@ -142,6 +142,51 @@ module.exports = async (req, res) => {
                 return res.json({ ok: true, profile: data });
             }
 
+            case 'stats': {
+                // Pulls just the 3 columns needed and aggregates in JS rather than
+                // relying on PostgREST's group-by/aggregate syntax — simpler and more
+                // predictable, and cheap at personal-observation-history scale (low
+                // thousands of rows). PostgREST caps an unbounded select at 1000 rows
+                // by default, so this pages explicitly past that rather than silently
+                // undercounting once an account passes 1000 observations.
+                const PAGE_SIZE = 1000;
+                const byCategory = {};
+                const speciesSeen = new Set();
+                let earliest = null, latest = null;
+                let total = 0;
+                let offset = 0;
+
+                while (true) {
+                    const { data, error } = await db
+                        .from('mynat_observations')
+                        .select('iconic_taxon, observed_on, taxon_id')
+                        .range(offset, offset + PAGE_SIZE - 1);
+                    if (error) throw error;
+
+                    for (const row of data) {
+                        const key = row.iconic_taxon || 'Unknown';
+                        byCategory[key] = (byCategory[key] || 0) + 1;
+                        if (row.taxon_id != null) speciesSeen.add(row.taxon_id);
+                        if (row.observed_on) {
+                            if (!earliest || row.observed_on < earliest) earliest = row.observed_on;
+                            if (!latest || row.observed_on > latest) latest = row.observed_on;
+                        }
+                    }
+                    total += data.length;
+                    if (data.length < PAGE_SIZE) break;
+                    offset += PAGE_SIZE;
+                }
+
+                const categories = Object.entries(byCategory)
+                    .map(([iconic_taxon, count]) => ({ iconic_taxon, count }))
+                    .sort((a, b) => b.count - a.count);
+
+                return res.json({
+                    ok: true,
+                    stats: { total, speciesCount: speciesSeen.size, earliest, latest, categories },
+                });
+            }
+
             case 'sync': {
                 const { data: profile, error: profErr } = await db
                     .from('mynat_profiles')

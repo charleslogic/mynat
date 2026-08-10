@@ -1,6 +1,33 @@
 // MyNat — app logic. Runs after the inline auth module in index.html defines
 // window._supabase and calls window._bootApp(user) on sign-in.
 
+// iNat's 13 official iconic taxa (verified against a live 1678-observation
+// account — Animalia genuinely shows up, it's their "Other Animals" catch-all
+// for things like worms/corals not covered by the more specific buckets)
+// plus an Unknown fallback for the rare null case.
+const ICONIC_TAXA = {
+  Aves: { label: 'Birds', color: 'var(--tax-aves)' },
+  Mammalia: { label: 'Mammals', color: 'var(--tax-mammalia)' },
+  Reptilia: { label: 'Reptiles', color: 'var(--tax-reptilia)' },
+  Amphibia: { label: 'Amphibians', color: 'var(--tax-amphibia)' },
+  Actinopterygii: { label: 'Ray-finned Fishes', color: 'var(--tax-actinopterygii)' },
+  Mollusca: { label: 'Mollusks', color: 'var(--tax-mollusca)' },
+  Arachnida: { label: 'Arachnids', color: 'var(--tax-arachnida)' },
+  Insecta: { label: 'Insects', color: 'var(--tax-insecta)' },
+  Plantae: { label: 'Plants', color: 'var(--tax-plantae)' },
+  Fungi: { label: 'Fungi', color: 'var(--tax-fungi)' },
+  Chromista: { label: 'Chromista', color: 'var(--tax-chromista)' },
+  Protozoa: { label: 'Protozoans', color: 'var(--tax-protozoa)' },
+  Animalia: { label: 'Other Animals', color: 'var(--tax-animalia)' },
+  Unknown: { label: 'Unknown', color: 'var(--tax-unknown)' },
+};
+
+function formatDate(isoDate) {
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+  });
+}
+
 async function apiFetch(action, opts = {}) {
   const { data: { session } } = await window._supabase.auth.getSession();
   const token = session?.access_token;
@@ -77,10 +104,46 @@ function renderOverview(profile) {
   }
 }
 
+function renderStats(stats) {
+  document.getElementById('stat-total').textContent = stats.total.toLocaleString();
+  document.getElementById('stat-species').textContent = stats.speciesCount.toLocaleString();
+  document.getElementById('stat-daterange').textContent = stats.earliest && stats.latest
+    ? `${formatDate(stats.earliest)} – ${formatDate(stats.latest)}`
+    : '–';
+
+  const breakdown = document.getElementById('category-breakdown');
+  breakdown.innerHTML = '';
+
+  if (stats.total === 0) {
+    breakdown.innerHTML = '<p class="cat-empty">No observations synced yet.</p>';
+    return;
+  }
+
+  const maxCount = Math.max(...stats.categories.map(c => c.count));
+  for (const { iconic_taxon, count } of stats.categories) {
+    const meta = ICONIC_TAXA[iconic_taxon] || ICONIC_TAXA.Unknown;
+    const row = document.createElement('div');
+    row.className = 'cat-row';
+    row.innerHTML = `
+      <div class="cat-label">${meta.label}</div>
+      <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(count / maxCount * 100).toFixed(1)}%; background:${meta.color}"></div></div>
+      <div class="cat-count">${count.toLocaleString()}</div>
+    `;
+    breakdown.appendChild(row);
+  }
+}
+
+async function loadStats() {
+  const result = await apiFetch('stats');
+  if (!result.ok) return;
+  renderStats(result.stats);
+}
+
 async function loadProfile() {
   const result = await apiFetch('profile');
   if (!result.ok) return;
   renderOverview(result.profile);
+  if (result.profile) loadStats();
 }
 
 // "Connect your iNat username" flow — resolves the username against iNat's
