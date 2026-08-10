@@ -2,17 +2,25 @@ const { createClient } = require('@supabase/supabase-js');
 
 const INAT_API = 'https://api.inaturalist.org/v1';
 
-// Anon client — used only to validate JWTs
-const supabaseAuth = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY
-);
-
 const COLD_START = new Date().toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+
+// Env is read lazily (not at module load) so a missing SUPABASE_URL/ANON_KEY
+// can't crash the whole function — including the no-auth `version` action,
+// which has no business depending on Supabase being configured at all.
+function requireEnv() {
+    const url = process.env.SUPABASE_URL;
+    const anonKey = process.env.SUPABASE_ANON_KEY;
+    if (!url || !anonKey) {
+        throw new Error('Server misconfigured: SUPABASE_URL/SUPABASE_ANON_KEY not set');
+    }
+    return { url, anonKey };
+}
 
 async function verifyAuth(req) {
     const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     if (!token) return null;
+    const { url, anonKey } = requireEnv();
+    const supabaseAuth = createClient(url, anonKey);
     const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
     if (error || !user) return null;
     return { user, token };
@@ -20,7 +28,8 @@ async function verifyAuth(req) {
 
 // User-scoped client — RLS enforces per-user isolation automatically
 function userDb(token) {
-    return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    const { url, anonKey } = requireEnv();
+    return createClient(url, anonKey, {
         global: { headers: { Authorization: 'Bearer ' + token } }
     });
 }
@@ -33,15 +42,16 @@ module.exports = async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(204).end();
     if (req.query.action === 'version') return res.status(200).json({ ok: true });
 
-    const auth = await verifyAuth(req);
-    if (!auth) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-
-    const { user, token } = auth;
-    const db = userDb(token);
-    const uid = user.id;
     const action = req.query.action || '';
 
     try {
+        const auth = await verifyAuth(req);
+        if (!auth) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+
+        const { user, token } = auth;
+        const db = userDb(token);
+        const uid = user.id;
+
         switch (action) {
 
             case 'profile': {
