@@ -117,9 +117,18 @@ memory (see dev plan "Open Questions").
 All three tables have RLS enabled. `mynat_profiles`/`mynat_observations`: `user_id = auth.uid()`
 on all operations. `mynat_category_shortcuts`: `select` open to `authenticated`, no client writes.
 
+## API Actions (`/api?action=`)
+
+| Action | Method | Description |
+|--------|--------|--------------|
+| `version` | GET | No auth — returns `{ok:true}` with `X-App-Version` header. Used by page-load version fetch. |
+| `profile` | GET | Current user's `mynat_profiles` row, or `null` if not yet connected. |
+| `link-inat` | POST | `{username}` — resolves against iNat's `/v1/users/autocomplete` (exact login match only, fuzzy results rejected), upserts `mynat_profiles`. Re-running with a new username re-links the account. |
+
 ## Build Status
 
-Phase 0 (scaffolding) complete: gate, auth, PWA shell, tab navigation, Leaflet/markercluster
-wired in but unused, schema written but not yet run against Supabase. Overview/Map/List tabs
-are empty-state placeholders. Next: Phase 1 (schema + the real "connect your iNat username"
-flow) — see the dev plan.
+Phase 0 (scaffolding) and Phase 1 (schema + auth linking) complete. Live at
+https://mynat.charleslogic.com/. Overview tab shows the real connect/connected state
+(`mynat.js: renderOverview`); Map/List tabs are still empty-state placeholders — no
+observations exist yet since sync (Phase 2) hasn't been built. Next: Phase 2 (`syncObservations`
+as an `api/index.js` action, paginating iNat's `/v1/observations`).

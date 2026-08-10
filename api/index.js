@@ -1,5 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 
+const INAT_API = 'https://api.inaturalist.org/v1';
+
 // Anon client — used only to validate JWTs
 const supabaseAuth = createClient(
     process.env.SUPABASE_URL,
@@ -34,16 +36,56 @@ module.exports = async (req, res) => {
     const auth = await verifyAuth(req);
     if (!auth) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
-    const { token } = auth;
+    const { user, token } = auth;
     const db = userDb(token);
+    const uid = user.id;
     const action = req.query.action || '';
 
     try {
         switch (action) {
 
-            // Phase 1 adds: profile (get/link iNat username), and Phase 2 adds
-            // sync (paginate iNat /v1/observations, upsert into mynat_observations,
-            // update mynat_profiles.last_synced_at). See dev plan sections 2-3.
+            case 'profile': {
+                const { data, error } = await db
+                    .from('mynat_profiles')
+                    .select('inat_username, inat_user_id, last_synced_at, created_at')
+                    .eq('user_id', uid)
+                    .maybeSingle();
+                if (error) throw error;
+                return res.json({ ok: true, profile: data || null });
+            }
+
+            case 'link-inat': {
+                const username = (req.body?.username || '').trim();
+                if (!username) return res.status(400).json({ ok: false, error: 'Username required' });
+                // iNat usernames are alphanumeric plus - and _ (matches their own signup validation).
+                if (!/^[a-zA-Z0-9_-]{1,40}$/.test(username)) {
+                    return res.status(400).json({ ok: false, error: 'That doesn\'t look like a valid iNaturalist username' });
+                }
+
+                const acResp = await fetch(`${INAT_API}/users/autocomplete?q=${encodeURIComponent(username)}`);
+                if (!acResp.ok) throw new Error('iNaturalist API error');
+                const acJson = await acResp.json();
+                // Autocomplete is fuzzy — only accept an exact (case-insensitive) login match.
+                const match = (acJson.results || []).find(u => u.login?.toLowerCase() === username.toLowerCase());
+                if (!match) {
+                    return res.status(404).json({ ok: false, error: `No iNaturalist user found with username "${username}"` });
+                }
+
+                const { data, error } = await db
+                    .from('mynat_profiles')
+                    .upsert(
+                        { user_id: uid, inat_username: match.login, inat_user_id: match.id },
+                        { onConflict: 'user_id' }
+                    )
+                    .select('inat_username, inat_user_id, last_synced_at, created_at')
+                    .single();
+                if (error) throw error;
+                return res.json({ ok: true, profile: data });
+            }
+
+            // Phase 2 adds: sync (paginate iNat /v1/observations, upsert into
+            // mynat_observations, update mynat_profiles.last_synced_at). See dev
+            // plan section 3.
 
             default:
                 return res.status(404).json({ ok: false, error: 'Unknown action' });

@@ -92,6 +92,18 @@
         <h2>Connect your iNaturalist account</h2>
         <p>Link your iNat username to pull in your observation history — species counts, date range, and a category breakdown will show up here.</p>
         <button class="btn-primary" id="connect-inat-btn">Connect iNaturalist</button>
+        <div id="connect-form" style="display:none">
+          <input type="text" class="form-input" id="inat-username-input" placeholder="iNaturalist username"
+                 autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+          <button class="btn-primary" id="connect-submit-btn">Connect</button>
+          <div class="form-error" id="connect-error"></div>
+        </div>
+      </div>
+      <div class="empty-state" id="overview-connected" style="display:none">
+        <div class="es-icon">✅</div>
+        <h2>Connected as <span id="connected-username"></span></h2>
+        <p id="connected-sync-status"></p>
+        <button class="btn-primary" id="change-username-btn">Change username</button>
       </div>
     </div>
 

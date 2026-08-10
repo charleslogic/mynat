@@ -54,20 +54,85 @@ function initCategoryChips() {
   });
 }
 
-// Phase 1 wires this button to the real "connect your iNat username" flow
-// (resolve username -> inat_user_id via /v1/users/autocomplete, save to
-// mynat_profiles). Phase 0 just proves the shell renders and auth works.
-function initConnectButton() {
+function renderOverview(profile) {
+  const emptyEl = document.getElementById('overview-empty');
+  const connectedEl = document.getElementById('overview-connected');
+  if (profile) {
+    emptyEl.style.display = 'none';
+    connectedEl.style.display = '';
+    document.getElementById('connected-username').textContent = `@${profile.inat_username}`;
+    document.getElementById('connected-sync-status').textContent = profile.last_synced_at
+      ? `Last synced ${new Date(profile.last_synced_at).toLocaleString()}`
+      : 'Not synced yet — sync lands in Phase 2.';
+  } else {
+    emptyEl.style.display = '';
+    connectedEl.style.display = 'none';
+    document.getElementById('connect-form').style.display = 'none';
+    document.getElementById('connect-inat-btn').style.display = '';
+  }
+}
+
+async function loadProfile() {
+  const result = await apiFetch('profile');
+  if (!result.ok) return;
+  renderOverview(result.profile);
+}
+
+// "Connect your iNat username" flow — resolves the username against iNat's
+// public /v1/users/autocomplete via the server (api/index.js action=link-inat,
+// which only accepts an exact login match) and upserts mynat_profiles.
+function initConnectFlow() {
   const btn = document.getElementById('connect-inat-btn');
+  const form = document.getElementById('connect-form');
+  const input = document.getElementById('inat-username-input');
+  const submitBtn = document.getElementById('connect-submit-btn');
+  const errorEl = document.getElementById('connect-error');
+  const changeBtn = document.getElementById('change-username-btn');
   if (!btn) return;
-  btn.addEventListener('click', () => {
-    alert('Connect flow lands in Phase 1 — see the dev plan.');
+
+  function showForm() {
+    btn.style.display = 'none';
+    form.style.display = '';
+    errorEl.textContent = '';
+    input.focus();
+  }
+
+  btn.addEventListener('click', showForm);
+
+  changeBtn.addEventListener('click', () => {
+    document.getElementById('overview-connected').style.display = 'none';
+    document.getElementById('overview-empty').style.display = '';
+    showForm();
   });
+
+  async function submitUsername() {
+    const username = input.value.trim();
+    if (!username) return;
+    errorEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Connecting…';
+    const result = await apiFetch('link-inat', {
+      method: 'POST',
+      body: JSON.stringify({ username }),
+    });
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Connect';
+    if (!result.ok) {
+      errorEl.textContent = result.error || 'Could not connect. Try again.';
+      return;
+    }
+    form.style.display = 'none';
+    renderOverview(result.profile);
+  }
+
+  submitBtn.addEventListener('click', submitUsername);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') submitUsername(); });
 }
 
 window._bootApp = function (user) {
   initTabs();
   initUserMenu(user);
   initCategoryChips();
-  initConnectButton();
+  initConnectFlow();
+  loadProfile();
 };
