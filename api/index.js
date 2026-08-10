@@ -95,11 +95,31 @@ function parseFilterInput(body) {
     const categories = Array.isArray(body.categories)
         ? body.categories.filter(c => typeof c === 'string').slice(0, 20)
         : [];
-    return { search, categories };
+    // Curated shortcut (Butterflies/Moths/etc, see mynat_category_shortcuts)
+    // — the client already has the full list cached from action=shortcuts
+    // and sends the taxon ID(s) directly rather than the label, so this
+    // doesn't need a second DB round trip per filter request. Still
+    // type-checked here since it's client-supplied input reaching a query.
+    const shortcut = body.shortcut && Number.isInteger(body.shortcut.taxonId)
+        ? {
+            taxonId: body.shortcut.taxonId,
+            excludeTaxonId: Number.isInteger(body.shortcut.excludeTaxonId) ? body.shortcut.excludeTaxonId : null,
+        }
+        : null;
+    return { search, categories, shortcut };
 }
 
-function applyObservationFilters(query, { search, categories }) {
+function applyObservationFilters(query, { search, categories, shortcut }) {
     if (categories.length) query = query.in('iconic_taxon', categories);
+    if (shortcut) {
+        // ancestor_ids contains the shortcut's taxon (e.g. Papilionoidea for
+        // Butterflies); excludeTaxonId subtracts a nested subgroup for splits
+        // that aren't their own clade (Moths = Lepidoptera minus
+        // Papilionoidea — verified via live data that this sums correctly:
+        // Butterflies + Moths == total Lepidoptera).
+        query = query.contains('ancestor_ids', [shortcut.taxonId]);
+        if (shortcut.excludeTaxonId) query = query.not('ancestor_ids', 'cs', `{${shortcut.excludeTaxonId}}`);
+    }
     if (search) {
         const cleaned = search.replace(/[,()]/g, ' ').trim();
         if (cleaned) {
@@ -138,6 +158,17 @@ module.exports = async (req, res) => {
                     .maybeSingle();
                 if (error) throw error;
                 return res.json({ ok: true, profile: data || null });
+            }
+
+            case 'shortcuts': {
+                // Shared reference data, not per-user — see mynat_category_shortcuts
+                // in supabase-setup.sql. Curated via the SQL editor, not the app.
+                const { data, error } = await db
+                    .from('mynat_category_shortcuts')
+                    .select('label, taxon_id, exclude_taxon_id')
+                    .order('label');
+                if (error) throw error;
+                return res.json({ ok: true, shortcuts: data });
             }
 
             case 'link-inat': {

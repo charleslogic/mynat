@@ -85,9 +85,18 @@ function initUserMenu(user) {
 // reuse the same search/category inputs without duplicating the wiring.
 let _listSearch = '';
 let _listCategories = [];
+// Curated shortcut (Butterflies vs Moths, etc.) — { taxonId, excludeTaxonId }
+// or null. Single-select, unlike the multi-select iconic-taxon chips, and
+// composes with them (AND) rather than replacing them, so "Insects" +
+// "Butterflies" is a valid (if redundant) combination.
+let _listShortcut = null;
 
 function isListActive() {
   return document.getElementById('tab-list').classList.contains('active');
+}
+
+function hasActiveFilters() {
+  return Boolean(_listSearch) || _listCategories.length > 0 || _listShortcut !== null;
 }
 
 function onFiltersChanged() {
@@ -135,6 +144,41 @@ function initFilterBar() {
 
       chipsEl.appendChild(chip);
     });
+}
+
+// Curated shortcuts (mynat_category_shortcuts, e.g. Butterflies/Moths/
+// Lizards/Snakes) — fetched once at boot rather than baked into the HTML,
+// same reasoning as the ICONIC_TAXA chips: the list is meant to be extended
+// later purely via the SQL editor (see CLAUDE.md), and hardcoding it
+// anywhere in the frontend would just recreate the drift bug that just got
+// fixed for the category chips. Row stays hidden if the table is empty.
+async function loadShortcuts() {
+  const result = await apiFetch('shortcuts');
+  if (!result.ok || !result.shortcuts.length) return;
+
+  const row = document.getElementById('filterbar-shortcuts-row');
+  const chipsEl = document.getElementById('filterbar-shortcuts');
+  row.style.display = '';
+
+  result.shortcuts.forEach(s => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.textContent = s.label;
+
+    chip.addEventListener('click', () => {
+      const wasActive = chip.classList.contains('active');
+      chipsEl.querySelectorAll('.chip').forEach(c => c.classList.remove('active')); // single-select
+      if (wasActive) {
+        _listShortcut = null;
+      } else {
+        chip.classList.add('active');
+        _listShortcut = { taxonId: s.taxon_id, excludeTaxonId: s.exclude_taxon_id };
+      }
+      onFiltersChanged();
+    });
+
+    chipsEl.appendChild(chip);
+  });
 }
 
 function setSyncStatus(text) {
@@ -410,7 +454,12 @@ async function loadObservations(reset) {
 
   const result = await apiFetch('observations', {
     method: 'POST',
-    body: JSON.stringify({ search: _listSearch, categories: _listCategories, offset: _listOffset }),
+    body: JSON.stringify({
+      search: _listSearch,
+      categories: _listCategories,
+      shortcut: _listShortcut,
+      offset: _listOffset,
+    }),
   });
 
   _listLoading = false;
@@ -427,7 +476,7 @@ async function loadObservations(reset) {
 
   _listOffset = result.nextOffset;
 
-  const hasFilters = Boolean(_listSearch) || _listCategories.length > 0;
+  const hasFilters = hasActiveFilters();
   if (result.total === 0) {
     emptyEl.style.display = '';
     document.getElementById('list-empty-text').textContent = hasFilters
@@ -569,7 +618,7 @@ async function loadMapPoints() {
 
   const result = await apiFetch('map', {
     method: 'POST',
-    body: JSON.stringify({ search: _listSearch, categories: _listCategories }),
+    body: JSON.stringify({ search: _listSearch, categories: _listCategories, shortcut: _listShortcut }),
   });
 
   _mapLoading = false;
@@ -581,7 +630,7 @@ async function loadMapPoints() {
 
   renderMapMarkers(result.points);
 
-  const hasFilters = Boolean(_listSearch) || _listCategories.length > 0;
+  const hasFilters = hasActiveFilters();
   const metaEl = document.getElementById('map-meta');
   if (result.points.length === 0) {
     metaEl.textContent = hasFilters
@@ -609,6 +658,7 @@ window._bootApp = function (user) {
   initTabs();
   initUserMenu(user);
   initFilterBar();
+  loadShortcuts();
   initConnectFlow();
   initSyncFlow();
   initStatsToggle();

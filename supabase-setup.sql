@@ -47,13 +47,35 @@ create index if not exists idx_mynat_obs_geo on mynat_observations(latitude, lon
 
 -- ── Category shortcuts (optional, shared reference data — not per-user) ───────
 -- Friendly labels mapped to iNat taxon IDs, e.g. ('Butterflies', 47224).
--- Populate once real taxon IDs are confirmed against the live iNat API — see
--- "Open Questions" in the dev plan before trusting any IDs from memory here.
+-- exclude_taxon_id supports paraphyletic splits where the "obvious" group
+-- isn't its own clade — e.g. Moths has no taxon ID of its own; it's
+-- Lepidoptera (47157) minus Papilionoidea (47224), a specific superfamily
+-- nested inside it, not a sibling. Lizards/Snakes don't need this: Sauria
+-- and Serpentes are siblings under Squamata, so each is already a clean,
+-- non-overlapping group on its own.
 create table if not exists mynat_category_shortcuts (
   label text primary key,
   taxon_id int not null,
+  exclude_taxon_id int,
   created_at timestamptz default now()
 );
+alter table mynat_category_shortcuts add column if not exists exclude_taxon_id int;
+
+-- Seed data — every ID here was looked up against the live API
+-- (GET /v1/taxa/{id} and /v1/taxa?q=...) and cross-checked against real
+-- synced observations (e.g. Butterflies + Moths-excl-Butterflies summed to
+-- exactly the Lepidoptera total) before being hardcoded, per the dev plan's
+-- explicit warning not to trust taxon IDs from memory. One example of why:
+-- the dev plan's own draft guess of 26718 for "Lizards" turned out to
+-- actually be Caudata (Salamanders) — the real Lizards ID is 85552 (Sauria).
+insert into mynat_category_shortcuts (label, taxon_id, exclude_taxon_id) values
+  ('Butterflies', 47224, null),   -- Papilionoidea
+  ('Moths', 47157, 47224),        -- Lepidoptera minus Papilionoidea
+  ('Lizards', 85552, null),       -- Sauria
+  ('Snakes', 85553, null)         -- Serpentes
+on conflict (label) do update set
+  taxon_id = excluded.taxon_id,
+  exclude_taxon_id = excluded.exclude_taxon_id;
 
 -- ── Row Level Security ───────────────────────────────────────────────────────
 -- user_id = auth.uid() is the entire isolation boundary (hab_habits/hab_scores

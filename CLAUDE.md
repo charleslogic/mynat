@@ -126,8 +126,9 @@ on all operations. `mynat_category_shortcuts`: `select` open to `authenticated`,
 | `link-inat` | POST | `{username}` — resolves against iNat's `/v1/users/autocomplete` (exact login match only, fuzzy results rejected), upserts `mynat_profiles`. Re-running with a new username re-links the account. |
 | `sync` | POST | `{page}` (default 1) — imports/updates observations for the connected iNat account. See Sync Engine below. |
 | `stats` | GET | `{total, speciesCount, earliest, latest, categories}` aggregated from `mynat_observations`. See Overview Stats below. |
-| `observations` | POST | `{search, categories, offset}` — paginated (30/page), `observed_on desc` list. See Detail List below. |
-| `map` | POST | `{search, categories}` — all matching lat/lng points (unpaginated to the client; paged past PostgREST's 1000-row cap server-side). See Map below. |
+| `observations` | POST | `{search, categories, shortcut, offset}` — paginated (30/page), `observed_on desc` list. See Detail List below. |
+| `map` | POST | `{search, categories, shortcut}` — all matching lat/lng points (unpaginated to the client; paged past PostgREST's 1000-row cap server-side). See Map below. |
+| `shortcuts` | GET | `{shortcuts: [{label, taxon_id, exclude_taxon_id}]}` from `mynat_category_shortcuts`. See Category Shortcuts below. |
 
 ## Sync Engine
 
@@ -227,12 +228,15 @@ sanitization/filter paths verified against the live `@mr-natural` account before
 (single-category count matched the Overview breakdown exactly; two categories summed correctly;
 a comma-and-parens search string returned zero results instead of erroring).
 
-**Shared filter state** (`mynat.js: _listSearch`/`_listCategories`, wired in `initFilterBar`):
-lives outside any one tab's code so Map reuses the same search input and category chips without
-duplicating the wiring — `onFiltersChanged()` reloads whichever of List/Map is currently active.
-Search is debounced 300ms; category chips are multi-select (OR within categories, matching the
-plan's "view birds+mammals together" intent) and reload immediately on click. Changing filters
-while on Overview just updates the pending state silently until you switch to List or Map.
+**Shared filter state** (`mynat.js: _listSearch`/`_listCategories`/`_listShortcut`, wired in
+`initFilterBar`/`loadShortcuts`): lives outside any one tab's code so Map reuses the same
+search/category/shortcut inputs without duplicating the wiring — `onFiltersChanged()` reloads
+whichever of List/Map is currently active. Search is debounced 300ms; category chips are
+multi-select (OR within categories, matching the plan's "view birds+mammals together" intent);
+the shortcut row is single-select and composes with (not replaces) the category chips — AND
+between the two, so "Insects" + "Butterflies" is a valid, if redundant, combination. Changing
+filters while on Overview just updates the pending state silently until you switch to List or
+Map.
 
 **Category chips are generated, not hardcoded** (`mynat.js: initFilterBar`, from `ICONIC_TAXA`,
 into `#filterbar-chips` in `index.html`) — each gets a colored dot matching its `ICONIC_TAXA`
@@ -297,11 +301,46 @@ Chrome (the deploy-and-eyeball-the-happy-path pass wouldn't have caught it), con
 the console rather than guessing. Fix is one word: `L.featureGroup()` instead of
 `L.layerGroup()`.
 
+## Category Shortcuts
+
+`mynat_category_shortcuts` (label, taxon_id, exclude_taxon_id) — curated groups more specific
+than the 13 iconic taxa, e.g. "Butterflies" vs "Moths" within Insecta. Shared reference data
+(RLS: `select` open to `authenticated`, no client writes), populated directly via the SQL editor
+— see the seed block in `supabase-setup.sql`. `action=shortcuts` returns the list; the client
+fetches it once at boot (`mynat.js: loadShortcuts`) and renders it as a second, single-select
+chip row in the filter bar, distinct from the multi-select `ICONIC_TAXA` chips above it.
+
+**Filtering mechanism is different from the category chips:** category chips filter on the flat
+`iconic_taxon` column (`.in()`); shortcuts filter on the `ancestor_ids` array via
+`.contains('ancestor_ids', [taxonId])`, since a shortcut like Butterflies is a specific clade
+nested inside a broader iconic taxon (Insecta), not a value the flat column itself takes.
+
+**`exclude_taxon_id` handles paraphyletic splits.** Not every "obvious" group is its own clade —
+Moths has no taxon ID of its own; it's Lepidoptera (47157) minus Papilionoidea (47224), which is
+nested *inside* Lepidoptera as one specific superfamily among many moth superfamilies. Excluding
+it is `.not('ancestor_ids', 'cs', '{47224}')` layered on top of the `.contains()`. Lizards/Snakes
+don't need this: Sauria and Serpentes are *siblings* under Squamata (verified via their
+`ancestor_ids`, which are identical up to and including Squamata), so each is already a clean,
+non-overlapping group without needing to exclude anything.
+
+**Every taxon ID was looked up live, not trusted from memory** — per the dev plan's explicit
+warning. Good thing: the plan's own draft example of `26718` for "Lizards" turned out to actually
+be Caudata (Salamanders); the real ID is `85552` (Sauria). All four seeded IDs
+(Butterflies=47224, Moths=47157 excl. 47224, Lizards=85552, Snakes=85553) were checked against
+`GET /v1/taxa/{id}` and cross-validated against the live `@mr-natural` account's synced data —
+Butterflies (116) + Moths-excluding-Butterflies (21) summed to exactly the Lepidoptera total
+(137), confirming both the IDs and the exclusion query logic before any of it shipped.
+
+**Composes with, doesn't replace, the category chips** — AND semantics (`mynat.js:
+_listShortcut`, single-select, alongside `_listCategories`, multi-select), so "Insects" +
+"Butterflies" is valid (if redundant). Adding a new shortcut later is purely a SQL insert — no
+code change needed, same as adding a new iNat account doesn't need one.
+
 ## Build Status
 
-Phase 0 (scaffolding) through Phase 5 (Map) complete — all 5 core phases of the dev plan done.
-Live at https://mynat.charleslogic.com/. Overview connects an account and shows real stats;
-Detail List and Map both read `mynat_observations` directly through shared search/category
-filter state, with Map additionally offering a clustered/individual marker toggle. Remaining
-plan items are Phase 6 (curated category shortcuts like "Butterflies" vs "Moths") and Phase 7
-(polish — loading states, error handling, mobile responsiveness).
+All 6 of the dev plan's core + refinement phases complete (Phase 7 polish remains). Live at
+https://mynat.charleslogic.com/. Overview connects an account and shows real stats; Detail List
+and Map both read `mynat_observations` directly through shared search/category/shortcut filter
+state, with Map additionally offering a clustered/individual marker toggle.
+**`supabase-setup.sql` needs to be re-run** (idempotent) to add `mynat_category_shortcuts
+.exclude_taxon_id` and seed the four shortcut rows — the schema/seed data don't apply themselves.

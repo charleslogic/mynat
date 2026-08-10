@@ -79,11 +79,20 @@
     </div>
 
     <div class="filterbar" id="filterbar" style="display:none">
-      <input type="text" id="search-input" placeholder="Search common or scientific name…">
-      <!-- Populated from ICONIC_TAXA in mynat.js, not hardcoded here — a
-           hardcoded subset is exactly what let these drift out of sync with
-           the Overview breakdown before. -->
-      <div class="filterbar-chips" id="filterbar-chips"></div>
+      <div class="filterbar-row">
+        <input type="text" id="search-input" placeholder="Search common or scientific name…">
+        <!-- Populated from ICONIC_TAXA in mynat.js, not hardcoded here — a
+             hardcoded subset is exactly what let these drift out of sync with
+             the Overview breakdown before. -->
+        <div class="filterbar-chips" id="filterbar-chips"></div>
+      </div>
+      <!-- Curated shortcuts (Butterflies vs Moths, etc.) — populated from
+           mynat_category_shortcuts via action=shortcuts; hidden until loaded
+           so an empty table doesn't show a bare "Quick picks:" label. -->
+      <div class="filterbar-row" id="filterbar-shortcuts-row" style="display:none">
+        <span class="filterbar-label">Quick picks:</span>
+        <div class="filterbar-chips" id="filterbar-shortcuts"></div>
+      </div>
     </div>
 
     <div class="tabpanel active" id="tab-overview">
