@@ -272,6 +272,19 @@
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+      // A new SW taking control mid-session (skipWaiting + clients.claim in
+      // sw.js) can otherwise leave this already-loaded page running old JS
+      // against a freshly-fetched index.html until the next manual reload —
+      // one-time auto-reload on handoff instead of making people hit reload
+      // twice after every deploy. The `refreshing` guard keeps a stray extra
+      // controllerchange event from looping.
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
     }
   </script>
 

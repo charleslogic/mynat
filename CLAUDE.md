@@ -196,6 +196,14 @@ Fixed by making the network-first branch match on `url.origin === location.origi
 same-origin app files) instead of just HTML, so a normal reload picks up new deploys. Cache
 bumped to `mynat-v2` to flush what was already cached under the old strategy.
 
+**Mid-session SW handoff (fixed):** even with the fix above, an already-open tab can still run
+old `mynat.js` against a freshly-fetched `index.html` for one reload right as a new SW takes
+over (`skipWaiting`/`clients.claim()` hands off control mid-session, not on next navigation) —
+this is what caused a one-time "first reload shows the disconnected empty state, second reload
+is fine" after the v1→v2 migration. `index.html`'s SW registration now listens for
+`controllerchange` and reloads once automatically (guarded by a `refreshing` flag against
+looping), so a deploy never needs more than the normal reload going forward.
+
 ## Build Status
 
 Phase 0 (scaffolding), Phase 1 (schema + auth linking), Phase 2 (sync engine), and Phase 3
