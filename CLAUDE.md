@@ -336,11 +336,34 @@ _listShortcut`, single-select, alongside `_listCategories`, multi-select), so "I
 "Butterflies" is valid (if redundant). Adding a new shortcut later is purely a SQL insert — no
 code change needed, same as adding a new iNat account doesn't need one.
 
+## Error Handling & Loading States
+
+**`apiFetch` never rejects** (`mynat.js`) — wrapped in try/catch, and checks the response
+`content-type` before calling `.json()`. Every call site already does
+`const result = await apiFetch(...); if (!result.ok) {...}`; before this, a network failure or a
+non-JSON response (a Vercel platform crash page — the exact shape hit during Phase 1's
+`SUPABASE_URL` misconfiguration) would reject the promise uncaught instead of resolving to that
+shape, leaving whatever "Loading…" text was showing stuck forever with no visible error.
+
+**Overview no longer flashes the disconnected state on load.** `#overview-loading` is now the
+default-visible element (not `#overview-empty`), swapped out once `action=profile` actually
+resolves (`renderOverview`). Previously a returning *connected* user saw a flash of "Connect your
+iNaturalist account" on every page load, however briefly, because the empty state was the HTML
+default. A `loadProfile` failure now leaves the loading state showing an error instead of
+misleadingly suggesting the account isn't connected.
+
+**iNat rate limits get a distinct message** (`api/index.js: inatErrorMessage`, used by both
+`sync` and `link-inat`) — a 429 says "wait a minute and try again" instead of the generic
+"iNaturalist API error", since the fix for a rate limit (wait) is different from every other
+failure mode. Realistically hard to hit at personal-observation-history scale (the sync engine's
+own page cap keeps each invocation to a handful of requests), but worth naming when it happens.
+
 ## Build Status
 
-All 6 of the dev plan's core + refinement phases complete (Phase 7 polish remains). Live at
+All 6 of the dev plan's core + refinement phases complete, plus a first pass at Phase 7 polish
+(error handling — loading-state/network-failure robustness). Live at
 https://mynat.charleslogic.com/. Overview connects an account and shows real stats; Detail List
 and Map both read `mynat_observations` directly through shared search/category/shortcut filter
-state, with Map additionally offering a clustered/individual marker toggle.
-**`supabase-setup.sql` needs to be re-run** (idempotent) to add `mynat_category_shortcuts
-.exclude_taxon_id` and seed the four shortcut rows — the schema/seed data don't apply themselves.
+state, with Map additionally offering a clustered/individual marker toggle. Remaining Phase 7
+polish: mobile responsiveness got a review pass (found solid down to ~540px width, no changes
+needed) but wasn't tested below that; empty states were already solid before this pass.

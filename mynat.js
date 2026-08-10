@@ -28,18 +28,32 @@ function formatDate(isoDate) {
   });
 }
 
+// Every caller does `const result = await apiFetch(...); if (!result.ok) {...}`
+// — this always resolves to that {ok, ...} shape instead of ever rejecting,
+// so a network failure or a non-JSON response (a Vercel platform crash page,
+// same shape as the SUPABASE_URL misconfiguration hit in Phase 1) shows up
+// as a normal error message instead of an uncaught rejection that leaves
+// whatever "Loading…" text was showing stuck forever.
 async function apiFetch(action, opts = {}) {
-  const { data: { session } } = await window._supabase.auth.getSession();
-  const token = session?.access_token;
-  const res = await fetch(`/api?action=${encodeURIComponent(action)}`, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(opts.headers || {}),
-    },
-  });
-  return res.json();
+  try {
+    const { data: { session } } = await window._supabase.auth.getSession();
+    const token = session?.access_token;
+    const res = await fetch(`/api?action=${encodeURIComponent(action)}`, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(opts.headers || {}),
+      },
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return { ok: false, error: `Server error (HTTP ${res.status})` };
+    }
+    return await res.json();
+  } catch (err) {
+    return { ok: false, error: err.message === 'Failed to fetch' ? 'No connection' : (err.message || 'Network error') };
+  }
 }
 
 function initTabs() {
@@ -187,6 +201,7 @@ function setSyncStatus(text) {
 }
 
 function renderOverview(profile) {
+  document.getElementById('overview-loading').style.display = 'none';
   const emptyEl = document.getElementById('overview-empty');
   const connectedEl = document.getElementById('overview-connected');
   if (profile) {
@@ -270,7 +285,14 @@ async function loadStats() {
 
 async function loadProfile() {
   const result = await apiFetch('profile');
-  if (!result.ok) return;
+  if (!result.ok) {
+    // Leaves #overview-loading showing instead of the connect prompt — a
+    // transient failure here shouldn't tell an already-connected user to
+    // reconnect their account.
+    document.getElementById('overview-loading-text').textContent =
+      `Couldn't load your profile: ${result.error || 'unknown error'}. Try reloading.`;
+    return;
+  }
   renderOverview(result.profile);
   if (result.profile) loadStats();
 }

@@ -2,6 +2,15 @@ const { createClient } = require('@supabase/supabase-js');
 
 const INAT_API = 'https://api.inaturalist.org/v1';
 
+// iNat's rate limit (60-100 req/min, see dev plan) is realistically hard to
+// hit at personal-observation-history scale, but calling it out specifically
+// beats a generic "API error" when it does happen — the fix (wait, retry) is
+// different from every other failure mode here.
+function inatErrorMessage(resp, context) {
+    if (resp.status === 429) return `iNaturalist rate limit hit — wait a minute and try again (${context}).`;
+    return `iNaturalist API error (${context}, HTTP ${resp.status})`;
+}
+
 const COLD_START = new Date().toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
 
 // Env is read lazily (not at module load) so a missing SUPABASE_URL/ANON_KEY
@@ -180,7 +189,7 @@ module.exports = async (req, res) => {
                 }
 
                 const acResp = await fetch(`${INAT_API}/users/autocomplete?q=${encodeURIComponent(username)}`);
-                if (!acResp.ok) throw new Error('iNaturalist API error');
+                if (!acResp.ok) throw new Error(inatErrorMessage(acResp, 'username lookup'));
                 const acJson = await acResp.json();
                 // Autocomplete is fuzzy — only accept an exact (case-insensitive) login match.
                 const match = (acJson.results || []).find(u => u.login?.toLowerCase() === username.toLowerCase());
@@ -353,7 +362,7 @@ module.exports = async (req, res) => {
                     const obsResp = await fetch(`${INAT_API}/observations?${params.toString()}`, {
                         headers: { 'User-Agent': 'MyNat (https://mynat.charleslogic.com)' },
                     });
-                    if (!obsResp.ok) throw new Error(`iNaturalist API error (page ${page})`);
+                    if (!obsResp.ok) throw new Error(inatErrorMessage(obsResp, `page ${page}`));
                     const obsJson = await obsResp.json();
                     const results = obsJson.results || [];
                     lastPage = page;

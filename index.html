@@ -80,7 +80,7 @@
 
     <div class="filterbar" id="filterbar" style="display:none">
       <div class="filterbar-row">
-        <input type="text" id="search-input" placeholder="Search common or scientific name…">
+        <input type="text" id="search-input" placeholder="Search species…" title="Search common or scientific name">
         <!-- Populated from ICONIC_TAXA in mynat.js, not hardcoded here — a
              hardcoded subset is exactly what let these drift out of sync with
              the Overview breakdown before. -->
@@ -96,7 +96,13 @@
     </div>
 
     <div class="tabpanel active" id="tab-overview">
-      <div class="empty-state" id="overview-empty">
+      <!-- Shown until action=profile resolves, so a returning connected user
+           doesn't see a flash of the "Connect" prompt below on every load. -->
+      <div class="empty-state" id="overview-loading">
+        <div class="es-icon">🌿</div>
+        <p id="overview-loading-text">Loading…</p>
+      </div>
+      <div class="empty-state" id="overview-empty" style="display:none">
         <div class="es-icon">🌿</div>
         <h2>Connect your iNaturalist account</h2>
         <p>Link your iNat username to pull in your observation history — species counts, date range, and a category breakdown will show up here.</p>
