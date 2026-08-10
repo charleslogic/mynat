@@ -80,12 +80,10 @@
 
     <div class="filterbar" id="filterbar" style="display:none">
       <input type="text" id="search-input" placeholder="Search common or scientific name…">
-      <div class="chip" data-category="Aves">Birds</div>
-      <div class="chip" data-category="Mammalia">Mammals</div>
-      <div class="chip" data-category="Reptilia">Reptiles</div>
-      <div class="chip" data-category="Insecta">Insects</div>
-      <div class="chip" data-category="Plantae">Plants</div>
-      <div class="chip" data-category="Fungi">Fungi</div>
+      <!-- Populated from ICONIC_TAXA in mynat.js, not hardcoded here — a
+           hardcoded subset is exactly what let these drift out of sync with
+           the Overview breakdown before. -->
+      <div class="filterbar-chips" id="filterbar-chips"></div>
     </div>
 
     <div class="tabpanel active" id="tab-overview">

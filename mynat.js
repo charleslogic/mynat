@@ -81,9 +81,8 @@ function initUserMenu(user) {
   });
 }
 
-// Shared by Detail List (this phase) and eventually Map (Phase 5) — filter
-// state lives here so a future Map tab can reuse the same search/category
-// inputs without duplicating the wiring.
+// Shared by Detail List and Map — filter state lives here so both tabs
+// reuse the same search/category inputs without duplicating the wiring.
 let _listSearch = '';
 let _listCategories = [];
 
@@ -107,14 +106,35 @@ function initFilterBar() {
     }, 300);
   });
 
-  document.querySelectorAll('.chip[data-category]').forEach(chip => {
-    chip.addEventListener('click', () => {
-      chip.classList.toggle('active');
-      _listCategories = [...document.querySelectorAll('.chip[data-category].active')]
-        .map(c => c.dataset.category);
-      onFiltersChanged();
+  // Generated from ICONIC_TAXA rather than hardcoded in index.html — a
+  // hardcoded subset (originally just 6 of the 13 real taxa) is exactly what
+  // let the filter chips drift out of sync with the Overview breakdown.
+  // 'Unknown' is skipped: it's our fallback label for a null iconic_taxon
+  // column, and .in() doesn't match NULL, so a chip for it wouldn't filter
+  // anything.
+  const chipsEl = document.getElementById('filterbar-chips');
+  Object.entries(ICONIC_TAXA)
+    .filter(([key]) => key !== 'Unknown')
+    .forEach(([key, meta]) => {
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.dataset.category = key;
+
+      const dot = document.createElement('span');
+      dot.className = 'chip-dot';
+      dot.style.background = meta.color;
+      chip.appendChild(dot);
+      chip.appendChild(document.createTextNode(meta.label));
+
+      chip.addEventListener('click', () => {
+        chip.classList.toggle('active');
+        _listCategories = [...document.querySelectorAll('.chip[data-category].active')]
+          .map(c => c.dataset.category);
+        onFiltersChanged();
+      });
+
+      chipsEl.appendChild(chip);
     });
-  });
 }
 
 function setSyncStatus(text) {

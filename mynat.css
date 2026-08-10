@@ -446,7 +446,12 @@ html, body {
   font-family: inherit;
 }
 
+.filterbar-chips { display: flex; gap: 8px; flex-shrink: 0; }
+
 .chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid var(--border);
@@ -458,6 +463,13 @@ html, body {
   cursor: pointer;
 }
 .chip.active { border-color: var(--accent); color: var(--accent); }
+
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
 
 /* ── Detail List tab ── */
 .list-meta {

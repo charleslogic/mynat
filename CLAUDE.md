@@ -228,12 +228,22 @@ sanitization/filter paths verified against the live `@mr-natural` account before
 a comma-and-parens search string returned zero results instead of erroring).
 
 **Shared filter state** (`mynat.js: _listSearch`/`_listCategories`, wired in `initFilterBar`):
-lives outside any one tab's code so Map (Phase 5) reuses the same search input and category
-chips without duplicating the wiring — `onFiltersChanged()` reloads whichever of List/Map is
-currently active. Search is debounced 300ms; category chips are multi-select (OR within
-categories, matching the plan's "view birds+mammals together" intent) and reload immediately on
-click. Changing filters while on Overview just updates the pending state silently until you
-switch to List or Map.
+lives outside any one tab's code so Map reuses the same search input and category chips without
+duplicating the wiring — `onFiltersChanged()` reloads whichever of List/Map is currently active.
+Search is debounced 300ms; category chips are multi-select (OR within categories, matching the
+plan's "view birds+mammals together" intent) and reload immediately on click. Changing filters
+while on Overview just updates the pending state silently until you switch to List or Map.
+
+**Category chips are generated, not hardcoded** (`mynat.js: initFilterBar`, from `ICONIC_TAXA`,
+into `#filterbar-chips` in `index.html`) — each gets a colored dot matching its `ICONIC_TAXA`
+color. This replaced an earlier version with 6 chips hardcoded directly in `index.html`
+(Birds/Mammals/Reptiles/Insects/Plants/Fungi) covering only 6 of the 13 real iconic taxa; the
+other 7 (Amphibians, Ray-finned Fishes, Mollusks, Arachnids, Chromista, Protozoans, Other
+Animals) had no way to filter List/Map even though they show up in the Overview breakdown —
+found by the user comparing the two. Generating from the same `ICONIC_TAXA` map the breakdown
+and popups already use means the two can't drift apart again. `Unknown` is deliberately excluded
+from the chips: it's a display-only fallback label for a `null` `iconic_taxon` column, and
+`.in()` doesn't match `NULL`, so a chip for it wouldn't actually filter anything.
 
 **Cards** (`mynat.js: buildObsCard`) are built with `document.createElement`/`.textContent`, not
 `innerHTML` string interpolation — `common_name`, `scientific_name`, and `place_guess` are other
