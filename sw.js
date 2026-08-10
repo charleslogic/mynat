@@ -1,4 +1,4 @@
-const CACHE = 'mynat-v1';
+const CACHE = 'mynat-v2';
 const SHELL = [
     'supabase.umd.js',   // self-hosted Supabase lib — precached so auth survives CDN/network issues
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
@@ -56,8 +56,14 @@ self.addEventListener('fetch', e => {
         return;
     }
 
-    // HTML / app shell: network-first so updates are seen immediately
-    if (url.pathname.endsWith('.html') || url.pathname.endsWith('/') || !url.pathname.includes('.')) {
+    // Same-origin app files (HTML, mynat.js, mynat.css, icon, manifest):
+    // network-first so a new deploy is picked up on the very next load
+    // instead of silently serving a stale cached copy until a hard refresh.
+    // This used to only cover HTML — splitting app logic into mynat.js/
+    // mynat.css (unlike hab, which keeps everything inline in index.html)
+    // meant those files fell through to the cache-first branch below and
+    // went stale after every deploy.
+    if (url.origin === location.origin) {
         e.respondWith(
             fetch(e.request)
                 .then(res => {
@@ -72,7 +78,9 @@ self.addEventListener('fetch', e => {
         return;
     }
 
-    // CDN assets: cache-first
+    // Cross-origin CDN assets (Leaflet, fonts): cache-first. Safe to cache
+    // indefinitely since these URLs are version-pinned — they never change
+    // under the same URL.
     e.respondWith(
         caches.match(e.request).then(cached => {
             if (cached) return cached;

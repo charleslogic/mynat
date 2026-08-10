@@ -104,12 +104,18 @@ function renderOverview(profile) {
   }
 }
 
-function renderStats(stats) {
-  document.getElementById('stat-total').textContent = stats.total.toLocaleString();
-  document.getElementById('stat-species').textContent = stats.speciesCount.toLocaleString();
-  document.getElementById('stat-daterange').textContent = stats.earliest && stats.latest
-    ? `${formatDate(stats.earliest)} – ${formatDate(stats.latest)}`
-    : '–';
+// 'count' (observations per category) or 'speciesCount' (distinct species per
+// category) — toggled by clicking the Observations/Species stat cards.
+let _statsMetric = 'count';
+let _lastStats = null;
+
+function renderCategoryBreakdown() {
+  const stats = _lastStats;
+  if (!stats) return;
+
+  document.querySelectorAll('.stat-card[data-metric]').forEach(card => {
+    card.classList.toggle('active', card.dataset.metric === _statsMetric);
+  });
 
   const breakdown = document.getElementById('category-breakdown');
   breakdown.innerHTML = '';
@@ -119,18 +125,41 @@ function renderStats(stats) {
     return;
   }
 
-  const maxCount = Math.max(...stats.categories.map(c => c.count));
-  for (const { iconic_taxon, count } of stats.categories) {
-    const meta = ICONIC_TAXA[iconic_taxon] || ICONIC_TAXA.Unknown;
+  const metric = _statsMetric;
+  const sorted = [...stats.categories].sort((a, b) => b[metric] - a[metric]);
+  const maxVal = Math.max(...sorted.map(c => c[metric]));
+
+  for (const cat of sorted) {
+    const meta = ICONIC_TAXA[cat.iconic_taxon] || ICONIC_TAXA.Unknown;
+    const value = cat[metric];
     const row = document.createElement('div');
     row.className = 'cat-row';
     row.innerHTML = `
       <div class="cat-label">${meta.label}</div>
-      <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(count / maxCount * 100).toFixed(1)}%; background:${meta.color}"></div></div>
-      <div class="cat-count">${count.toLocaleString()}</div>
+      <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${maxVal ? (value / maxVal * 100).toFixed(1) : 0}%; background:${meta.color}"></div></div>
+      <div class="cat-count">${value.toLocaleString()}</div>
     `;
     breakdown.appendChild(row);
   }
+}
+
+function initStatsToggle() {
+  document.querySelectorAll('.stat-card[data-metric]').forEach(card => {
+    card.addEventListener('click', () => {
+      _statsMetric = card.dataset.metric;
+      renderCategoryBreakdown();
+    });
+  });
+}
+
+function renderStats(stats) {
+  _lastStats = stats;
+  document.getElementById('stat-total').textContent = stats.total.toLocaleString();
+  document.getElementById('stat-species').textContent = stats.speciesCount.toLocaleString();
+  document.getElementById('stat-daterange').textContent = stats.earliest && stats.latest
+    ? `${formatDate(stats.earliest)} – ${formatDate(stats.latest)}`
+    : '–';
+  renderCategoryBreakdown();
 }
 
 async function loadStats() {
@@ -250,5 +279,6 @@ window._bootApp = function (user) {
   initCategoryChips();
   initConnectFlow();
   initSyncFlow();
+  initStatsToggle();
   loadProfile();
 };

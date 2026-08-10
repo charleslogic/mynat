@@ -151,6 +151,7 @@ module.exports = async (req, res) => {
                 // undercounting once an account passes 1000 observations.
                 const PAGE_SIZE = 1000;
                 const byCategory = {};
+                const categorySpecies = {}; // iconic_taxon -> Set(taxon_id), for the species-view toggle
                 const speciesSeen = new Set();
                 let earliest = null, latest = null;
                 let total = 0;
@@ -166,7 +167,10 @@ module.exports = async (req, res) => {
                     for (const row of data) {
                         const key = row.iconic_taxon || 'Unknown';
                         byCategory[key] = (byCategory[key] || 0) + 1;
-                        if (row.taxon_id != null) speciesSeen.add(row.taxon_id);
+                        if (row.taxon_id != null) {
+                            speciesSeen.add(row.taxon_id);
+                            (categorySpecies[key] || (categorySpecies[key] = new Set())).add(row.taxon_id);
+                        }
                         if (row.observed_on) {
                             if (!earliest || row.observed_on < earliest) earliest = row.observed_on;
                             if (!latest || row.observed_on > latest) latest = row.observed_on;
@@ -178,7 +182,11 @@ module.exports = async (req, res) => {
                 }
 
                 const categories = Object.entries(byCategory)
-                    .map(([iconic_taxon, count]) => ({ iconic_taxon, count }))
+                    .map(([iconic_taxon, count]) => ({
+                        iconic_taxon,
+                        count,
+                        speciesCount: categorySpecies[iconic_taxon]?.size ?? 0,
+                    }))
                     .sort((a, b) => b.count - a.count);
 
                 return res.json({

@@ -311,7 +311,7 @@ html, body {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
-  margin-bottom: 28px;
+  margin-bottom: 8px;
 }
 
 .stat-card {
@@ -321,6 +321,10 @@ html, body {
   padding: 16px 10px;
   text-align: center;
 }
+
+.stat-card[data-metric] { cursor: pointer; transition: border-color .15s; }
+.stat-card[data-metric]:hover { border-color: var(--accent); }
+.stat-card[data-metric].active { border-color: var(--accent); }
 
 .stat-value {
   font-family: 'Space Mono', monospace;
@@ -335,6 +339,13 @@ html, body {
   margin-top: 4px;
   text-transform: uppercase;
   letter-spacing: .3px;
+}
+
+.breakdown-hint {
+  font-size: .75rem;
+  color: var(--muted);
+  text-align: center;
+  margin: 0 0 20px;
 }
 
 .category-breakdown { display: flex; flex-direction: column; gap: 10px; }

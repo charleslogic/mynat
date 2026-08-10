@@ -106,11 +106,11 @@
         </div>
 
         <div class="stats-grid">
-          <div class="stat-card">
+          <div class="stat-card active" data-metric="count" id="stat-card-observations">
             <div class="stat-value" id="stat-total">–</div>
             <div class="stat-label">Observations</div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" data-metric="speciesCount" id="stat-card-species">
             <div class="stat-value" id="stat-species">–</div>
             <div class="stat-label">Species</div>
           </div>
@@ -119,6 +119,7 @@
             <div class="stat-label">Date range</div>
           </div>
         </div>
+        <p class="breakdown-hint">Tap a card to switch the breakdown below between observations and species.</p>
 
         <div class="category-breakdown" id="category-breakdown"></div>
 

@@ -178,8 +178,23 @@ specific ones. `mynat.js: ICONIC_TAXA` and the `--tax-*` CSS variables in `mynat
 
 **UI** (`mynat.js: renderStats`, `#overview-connected` in `index.html`): 3-stat-card grid
 (observations / species / date range) plus a horizontal bar per category, color-coded via
-`ICONIC_TAXA`, sorted by count descending. Refreshed on page load (if connected) and again after
-every `runSync()` completes.
+`ICONIC_TAXA`. Refreshed on page load (if connected) and again after every `runSync()`
+completes.
+
+**Observations/Species toggle:** the Observations and Species stat cards are clickable
+(`data-metric="count"` / `data-metric="speciesCount"`) — clicking switches
+`mynat.js: _statsMetric` and re-renders the breakdown (`renderCategoryBreakdown`) sorted and
+bar-scaled by that metric instead of refetching. `stats.categories[].speciesCount` (distinct
+`taxon_id` per iconic taxon, computed alongside the overall species count via a
+`categorySpecies` map in the same `api/index.js` loop) backs this.
+
+**Service worker cache bug (fixed):** `sw.js` originally only treated HTML as network-first;
+everything else fell into the cache-first "CDN assets" branch — including same-origin
+`mynat.js`/`mynat.css`, which meant every deploy went stale until a hard refresh. `hab` never
+hit this because its app logic is inline in `index.html` rather than split into separate files.
+Fixed by making the network-first branch match on `url.origin === location.origin` (all
+same-origin app files) instead of just HTML, so a normal reload picks up new deploys. Cache
+bumped to `mynat-v2` to flush what was already cached under the old strategy.
 
 ## Build Status
 
