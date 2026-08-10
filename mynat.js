@@ -505,7 +505,7 @@ function initMap() {
   }).addTo(_map);
 
   _clusterGroup = L.markerClusterGroup();
-  _flatGroup = L.layerGroup();
+  _flatGroup = L.featureGroup(); // not layerGroup — featureGroup adds getBounds(), needed below
   _clusterGroup.addTo(_map); // clustered is the default view
 
   // Leaflet reads the container's size synchronously at construction time;

@@ -276,6 +276,17 @@ the same free-text-data reason as list cards, and passed to `bindPopup` as a fac
 to load `leaflet.js`/`leaflet.markercluster.js` — so `L` was never defined. Added both to
 `index.html`'s `<head>`, synchronous, matching `nam`'s convention.
 
+**`layerGroup` vs `featureGroup` bug (fixed, caught live):** `_flatGroup` was originally created
+with `L.layerGroup()`, which has no `getBounds()` — only `L.featureGroup`/`L.markerClusterGroup`
+do. `renderMapMarkers` calls `getBounds()` on whichever group is active to fit the map to the
+current points, so switching to Individual mode and then changing a filter threw
+`activeGroup.getBounds is not a function` right after markers were drawn but before the
+"N mapped observations" meta text updated — visually the map looked fine, but the meta line got
+stuck on "Loading…" forever. Found by testing the toggle + filter combination live via Claude in
+Chrome (the deploy-and-eyeball-the-happy-path pass wouldn't have caught it), confirmed by reading
+the console rather than guessing. Fix is one word: `L.featureGroup()` instead of
+`L.layerGroup()`.
+
 ## Build Status
 
 Phase 0 (scaffolding) through Phase 5 (Map) complete — all 5 core phases of the dev plan done.
