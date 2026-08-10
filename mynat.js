@@ -54,6 +54,11 @@ function initCategoryChips() {
   });
 }
 
+function setSyncStatus(text) {
+  const el = document.getElementById('connected-sync-status');
+  if (el) el.textContent = text;
+}
+
 function renderOverview(profile) {
   const emptyEl = document.getElementById('overview-empty');
   const connectedEl = document.getElementById('overview-connected');
@@ -61,9 +66,9 @@ function renderOverview(profile) {
     emptyEl.style.display = 'none';
     connectedEl.style.display = '';
     document.getElementById('connected-username').textContent = `@${profile.inat_username}`;
-    document.getElementById('connected-sync-status').textContent = profile.last_synced_at
+    setSyncStatus(profile.last_synced_at
       ? `Last synced ${new Date(profile.last_synced_at).toLocaleString()}`
-      : 'Not synced yet — sync lands in Phase 2.';
+      : 'Not synced yet.');
   } else {
     emptyEl.style.display = '';
     connectedEl.style.display = 'none';
@@ -123,10 +128,57 @@ function initConnectFlow() {
     }
     form.style.display = 'none';
     renderOverview(result.profile);
+    runSync(); // "Connect" always kicks off the initial full import
   }
 
   submitBtn.addEventListener('click', submitUsername);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') submitUsername(); });
+}
+
+// Pages through api?action=sync until the server reports hasMore:false. Each
+// call only covers a few iNat pages (see api/index.js) to stay well under
+// Vercel's function time limit, so a full historical import takes several
+// round trips for an active account — this loop just keeps calling with the
+// server-supplied nextPage until it's done.
+let _syncing = false;
+
+async function runSync() {
+  if (_syncing) return;
+  _syncing = true;
+  const btn = document.getElementById('sync-now-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Syncing…'; }
+
+  let page = 1;
+  let total = 0;
+  let hasMore = true;
+
+  try {
+    while (hasMore) {
+      const result = await apiFetch('sync', {
+        method: 'POST',
+        body: JSON.stringify({ page }),
+      });
+      if (!result.ok) {
+        setSyncStatus(`Sync failed: ${result.error || 'unknown error'}`);
+        return;
+      }
+      total += result.imported;
+      hasMore = result.hasMore;
+      page = result.nextPage;
+      setSyncStatus(`Synced ${total} observation${total === 1 ? '' : 's'}…`);
+    }
+    setSyncStatus(`Synced ${total} observation${total === 1 ? '' : 's'} — up to date.`);
+    await loadProfile();
+  } finally {
+    _syncing = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Sync now'; }
+  }
+}
+
+function initSyncFlow() {
+  const btn = document.getElementById('sync-now-btn');
+  if (!btn) return;
+  btn.addEventListener('click', () => runSync());
 }
 
 window._bootApp = function (user) {
@@ -134,5 +186,6 @@ window._bootApp = function (user) {
   initUserMenu(user);
   initCategoryChips();
   initConnectFlow();
+  initSyncFlow();
   loadProfile();
 };

@@ -124,11 +124,42 @@ on all operations. `mynat_category_shortcuts`: `select` open to `authenticated`,
 | `version` | GET | No auth — returns `{ok:true}` with `X-App-Version` header. Used by page-load version fetch. |
 | `profile` | GET | Current user's `mynat_profiles` row, or `null` if not yet connected. |
 | `link-inat` | POST | `{username}` — resolves against iNat's `/v1/users/autocomplete` (exact login match only, fuzzy results rejected), upserts `mynat_profiles`. Re-running with a new username re-links the account. |
+| `sync` | POST | `{page}` (default 1) — imports/updates observations for the connected iNat account. See Sync Engine below. |
+
+## Sync Engine
+
+`syncObservations`, implemented as the `sync` action in `api/index.js`. One code path handles
+both the initial full import (`mynat_profiles.last_synced_at` is null) and later incremental
+syncs (`&updated_since=<last_synced_at>`) — same request shape either way, just with or without
+that query param.
+
+**Resumable, not one-shot.** A single call only walks up to `MAX_PAGES_PER_CALL` (5) pages of
+`per_page=200` each, then returns `{imported, page, nextPage, hasMore}`. The client
+(`mynat.js: runSync`) loops, calling again with `page: nextPage` until `hasMore` is `false`.
+This exists because a real historical import (thousands of observations) would otherwise run
+long enough to hit Vercel's function execution time limit — capping each invocation keeps every
+round trip fast regardless of account size. `mynat_profiles.last_synced_at` is only written once,
+on the call where `hasMore` comes back `false`, so every call in between reads the same
+`last_synced_at` cutoff and the incremental window stays consistent across the whole session.
+
+**Pagination caveat:** uses classic `page`/`per_page`, which iNat's API only supports reliably up
+to `page * per_page = 10,000` results. Fine for a personal observation history; an account north
+of ~10k observations would need `id_above`-based pagination instead (not implemented).
+
+**Field mapping** (`mapObservation`) — verified against live API responses for the connected
+test account: `taxon.ancestor_ids` (the full lineage array the whole app's category-search design
+depends on), `taxon.iconic_taxon_name`, coordinates from `geojson.coordinates` (falls back to
+parsing the `location` "lat,lng" string), and photo URLs via `derivePhotoUrls` — iNat photo URLs
+encode their size in the filename (`.../square.jpg`), so other sizes are just that segment
+swapped, no extra request needed.
+
+**Triggers:** automatically after a successful `link-inat` (`mynat.js: submitUsername` calls
+`runSync()`), and manually via the "Sync now" button in the connected state.
 
 ## Build Status
 
-Phase 0 (scaffolding) and Phase 1 (schema + auth linking) complete. Live at
-https://mynat.charleslogic.com/. Overview tab shows the real connect/connected state
-(`mynat.js: renderOverview`); Map/List tabs are still empty-state placeholders — no
-observations exist yet since sync (Phase 2) hasn't been built. Next: Phase 2 (`syncObservations`
-as an `api/index.js` action, paginating iNat's `/v1/observations`).
+Phase 0 (scaffolding), Phase 1 (schema + auth linking), and Phase 2 (sync engine) complete. Live
+at https://mynat.charleslogic.com/. Overview tab connects an account, runs the initial import,
+and shows last-synced status; Map/List tabs are still empty-state placeholders — Phase 3
+(Overview aggregate stats) and Phase 4/5 (List/Map, reading `mynat_observations`) haven't been
+built yet, so nothing displays the synced data besides the running import counter.

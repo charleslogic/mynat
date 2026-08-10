@@ -34,6 +34,55 @@ function userDb(token) {
     });
 }
 
+// iNat photo URLs come back sized to whatever the endpoint defaults to
+// (typically "square") with the size baked into the filename, e.g.
+// ".../12345/square.jpg". Other sizes are the same URL with that segment
+// swapped — no extra API call needed.
+const PHOTO_SIZES = ['square', 'small', 'medium', 'large', 'original'];
+function derivePhotoUrls(url) {
+    if (!url) return null;
+    const m = url.match(/\/(square|small|medium|large|original|thumb)(\.\w+)(\?.*)?$/);
+    if (!m) return { url, square: url, small: url, medium: url, large: url, original: url };
+    const [, matchedSize, ext] = m;
+    const out = { url };
+    for (const size of PHOTO_SIZES) {
+        out[size] = url.replace(`/${matchedSize}${ext}`, `/${size}${ext}`);
+    }
+    return out;
+}
+
+function mapObservation(obs, uid) {
+    const taxon = obs.taxon || {};
+    const photos = (obs.photos || []).map(p => derivePhotoUrls(p.url)).filter(Boolean);
+
+    let latitude = null, longitude = null;
+    if (Array.isArray(obs.geojson?.coordinates)) {
+        [longitude, latitude] = obs.geojson.coordinates;
+    } else if (typeof obs.location === 'string') {
+        const [lat, lng] = obs.location.split(',').map(Number);
+        if (!Number.isNaN(lat) && !Number.isNaN(lng)) { latitude = lat; longitude = lng; }
+    }
+
+    return {
+        inat_id: obs.id,
+        user_id: uid,
+        taxon_id: taxon.id ?? null,
+        scientific_name: taxon.name ?? null,
+        common_name: taxon.preferred_common_name ?? null,
+        iconic_taxon: taxon.iconic_taxon_name ?? null,
+        ancestor_ids: taxon.ancestor_ids ?? null,
+        taxon_rank: taxon.rank ?? null,
+        observed_on: obs.observed_on ?? null,
+        time_observed_at: obs.time_observed_at ?? null,
+        latitude,
+        longitude,
+        place_guess: obs.place_guess ?? null,
+        quality_grade: obs.quality_grade ?? null,
+        photos: photos.length ? photos : null,
+        inat_updated_at: obs.updated_at ?? null,
+    };
+}
+
 module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
@@ -93,9 +142,80 @@ module.exports = async (req, res) => {
                 return res.json({ ok: true, profile: data });
             }
 
-            // Phase 2 adds: sync (paginate iNat /v1/observations, upsert into
-            // mynat_observations, update mynat_profiles.last_synced_at). See dev
-            // plan section 3.
+            case 'sync': {
+                const { data: profile, error: profErr } = await db
+                    .from('mynat_profiles')
+                    .select('inat_user_id, last_synced_at')
+                    .eq('user_id', uid)
+                    .maybeSingle();
+                if (profErr) throw profErr;
+                if (!profile?.inat_user_id) {
+                    return res.status(400).json({ ok: false, error: 'Connect your iNaturalist account first' });
+                }
+
+                // Fixed for the whole sync session (a run of same-page-window calls
+                // from the client) — only written back once the session's last page
+                // comes up short, so every call in the session sees the same cutoff
+                // regardless of how many round trips it takes.
+                const since = profile.last_synced_at;
+
+                const startPage = Math.max(1, parseInt(req.body?.page, 10) || 1);
+                const PER_PAGE = 200;
+                // Caps each invocation to a handful of iNat requests so a big
+                // initial import can't run past Vercel's function time limit — the
+                // client just calls again with nextPage until hasMore is false.
+                // NOTE: classic page-based pagination on /v1/observations breaks
+                // down past page*per_page = 10,000 results (iNat API limitation).
+                // Fine for a personal observation history; an account with more
+                // than ~10k observations would need id-based (id_above) pagination
+                // instead — not implemented here.
+                const MAX_PAGES_PER_CALL = 5;
+
+                let imported = 0;
+                let lastPage = startPage - 1;
+                let hasMore = true;
+
+                for (let i = 0; i < MAX_PAGES_PER_CALL; i++) {
+                    const page = startPage + i;
+                    const params = new URLSearchParams({
+                        user_id: String(profile.inat_user_id),
+                        per_page: String(PER_PAGE),
+                        page: String(page),
+                        order: 'asc',
+                        order_by: 'id',
+                    });
+                    if (since) params.set('updated_since', since);
+
+                    const obsResp = await fetch(`${INAT_API}/observations?${params.toString()}`, {
+                        headers: { 'User-Agent': 'MyNat (https://mynat.charleslogic.com)' },
+                    });
+                    if (!obsResp.ok) throw new Error(`iNaturalist API error (page ${page})`);
+                    const obsJson = await obsResp.json();
+                    const results = obsJson.results || [];
+                    lastPage = page;
+
+                    if (results.length === 0) { hasMore = false; break; }
+
+                    const rows = results.map(o => mapObservation(o, uid));
+                    const { error: upsertErr } = await db
+                        .from('mynat_observations')
+                        .upsert(rows, { onConflict: 'inat_id' });
+                    if (upsertErr) throw upsertErr;
+                    imported += rows.length;
+
+                    if (results.length < PER_PAGE) { hasMore = false; break; }
+                }
+
+                if (!hasMore) {
+                    const { error: touchErr } = await db
+                        .from('mynat_profiles')
+                        .update({ last_synced_at: new Date().toISOString() })
+                        .eq('user_id', uid);
+                    if (touchErr) throw touchErr;
+                }
+
+                return res.json({ ok: true, imported, page: lastPage, nextPage: lastPage + 1, hasMore });
+            }
 
             default:
                 return res.status(404).json({ ok: false, error: 'Unknown action' });
