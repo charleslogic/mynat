@@ -1,0 +1,13 @@
+{
+  "name": "MyNat",
+  "short_name": "MyNat",
+  "description": "Browse, map, and search your personal iNaturalist observations",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0D0D12",
+  "theme_color": "#4CAF7D",
+  "icons": [
+    { "src": "mynat-icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

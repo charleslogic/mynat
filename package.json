@@ -1,0 +1,8 @@
+{
+  "name": "mynat",
+  "version": "1.0.0",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "@vercel/edge": "^1.1.1"
+  }
+}

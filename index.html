@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MyNat">
+  <meta name="theme-color" content="#0D0D12">
+  <link rel="apple-touch-icon" sizes="180x180" href="mynat-icon.svg">
+  <link rel="icon" type="image/svg+xml" href="mynat-icon.svg">
+  <link rel="manifest" href="/manifest.json">
+  <title>MyNat</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" integrity="sha384-pmjIAcz2bAn0xukfxADbZIb3t8oRT9Sv0rvO+BR5Csr6Dhqq+nZs59P0pPKQJkEV" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="mynat.css">
+</head>
+
+<body>
+  <!-- Login gate -->
+  <div id="login-gate">
+    <div id="login-gate-inner">
+      <div id="login-gate-title">🌿 MyNat</div>
+      <div id="login-gate-sub">Sign in to browse your iNaturalist observations</div>
+      <button id="google-signin-btn">
+        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+          <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+          <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+          <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+        </svg>
+        Continue with Google
+      </button>
+      <div class="auth-divider">or</div>
+      <div id="otp-email-step">
+        <input type="email" id="login-email" placeholder="Email address" autocomplete="email">
+        <button id="send-code-btn">Send code</button>
+      </div>
+      <div id="otp-code-step" style="display:none">
+        <div id="otp-sent-msg">Code sent — check your email</div>
+        <input type="text" id="login-code" placeholder="8-digit code" maxlength="8" inputmode="numeric" autocomplete="one-time-code">
+        <button id="verify-code-btn">Sign in</button>
+        <br><button id="otp-back-btn">Use different email</button>
+      </div>
+      <div id="otp-error"></div>
+      <div id="login-app-version" style="margin-top:18px;opacity:.6"></div>
+    </div>
+  </div>
+
+  <!-- App shell -->
+  <div id="app">
+    <div class="hdr">
+      <div class="hdr-brand">🌿 MyNat</div>
+      <div class="hdr-right">
+        <button id="user-btn" title="Account">👤</button>
+        <span class="hdr-ver" id="app-version"></span>
+      </div>
+    </div>
+
+    <div id="config-card">
+      <div class="cfg-email" id="cfg-email"></div>
+      <button class="cfg-link-btn" id="cfg-sign-out-btn">↩ Sign out</button>
+    </div>
+
+    <div class="tabbar">
+      <button class="tabbtn active" data-tab="overview">Overview</button>
+      <button class="tabbtn" data-tab="map">Map</button>
+      <button class="tabbtn" data-tab="list">List</button>
+    </div>
+
+    <div class="filterbar" id="filterbar" style="display:none">
+      <input type="text" id="search-input" placeholder="Search common or scientific name…">
+      <div class="chip" data-category="Aves">Birds</div>
+      <div class="chip" data-category="Mammalia">Mammals</div>
+      <div class="chip" data-category="Reptilia">Reptiles</div>
+      <div class="chip" data-category="Insecta">Insects</div>
+      <div class="chip" data-category="Plantae">Plants</div>
+      <div class="chip" data-category="Fungi">Fungi</div>
+    </div>
+
+    <div class="tabpanel active" id="tab-overview">
+      <div class="empty-state" id="overview-empty">
+        <div class="es-icon">🌿</div>
+        <h2>Connect your iNaturalist account</h2>
+        <p>Link your iNat username to pull in your observation history — species counts, date range, and a category breakdown will show up here.</p>
+        <button class="btn-primary" id="connect-inat-btn">Connect iNaturalist</button>
+      </div>
+    </div>
+
+    <div class="tabpanel" id="tab-map">
+      <div class="empty-state">
+        <div class="es-icon">🗺️</div>
+        <h2>Map</h2>
+        <p>Once observations are synced, they'll appear here on a Leaflet map, clustered and color-coded by category.</p>
+      </div>
+    </div>
+
+    <div class="tabpanel" id="tab-list">
+      <div class="empty-state">
+        <div class="es-icon">📋</div>
+        <h2>Detail list</h2>
+        <p>A date-descending list of your observations, filterable by category and search text, will appear here.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Supabase auth — module script (deferred, runs after DOM ready).
+       Library is SELF-HOSTED (supabase.umd.js, classic script below) and precached by
+       the service worker, so auth survives a slow/blocked/unreachable CDN — same
+       reasoning as hab/wm/annoyed. -->
+  <script src="supabase.umd.js"></script>
+  <script type="module">
+    const { createClient } = window.supabase;
+
+    const sb = createClient(
+      'https://nfvxmkknkxysjksyhbek.supabase.co',
+      'sb_publishable_Lju5epgXoT5HFOoyZdjGYw_ksPesDaB'
+    );
+    window._supabase = sb;
+
+    let otpEmail = '';
+    let _booted = false;
+
+    function showApp() {
+      document.getElementById('login-gate').style.display = 'none';
+      document.getElementById('app').classList.add('active');
+    }
+
+    function showLoginState() {
+      _booted = false;
+      document.getElementById('app').classList.remove('active');
+      document.getElementById('login-gate').style.display = 'flex';
+      document.getElementById('otp-email-step').style.display = '';
+      document.getElementById('otp-code-step').style.display = 'none';
+      document.getElementById('otp-error').textContent = '';
+      const btn = document.getElementById('send-code-btn');
+      btn.disabled = false; btn.textContent = 'Send code';
+    }
+
+    function bootOnce(user) {
+      if (_booted) return;
+      _booted = true;
+      showApp();
+      if (typeof window._bootApp === 'function') window._bootApp(user);
+    }
+
+    // Google OAuth
+    document.getElementById('google-signin-btn').addEventListener('click', async () => {
+      await sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin + window.location.pathname }
+      });
+    });
+
+    // OTP — send code
+    function otpError(msg) {
+      document.getElementById('otp-error').textContent = msg;
+    }
+
+    document.getElementById('send-code-btn').addEventListener('click', async () => {
+      const email = document.getElementById('login-email').value.trim();
+      if (!email) return;
+      const btn = document.getElementById('send-code-btn');
+      btn.disabled = true; btn.textContent = 'Sending…';
+      otpError('');
+      const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+      if (error) {
+        otpError(error.message || 'Could not send code. Try again.');
+        btn.disabled = false; btn.textContent = 'Send code';
+        return;
+      }
+      otpEmail = email;
+      document.getElementById('otp-email-step').style.display = 'none';
+      document.getElementById('otp-code-step').style.display = '';
+      document.getElementById('login-code').focus();
+    });
+
+    document.getElementById('login-email').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('send-code-btn').click();
+    });
+
+    // OTP — verify code
+    document.getElementById('verify-code-btn').addEventListener('click', async () => {
+      const code = document.getElementById('login-code').value.trim();
+      if (!code) return;
+      const btn = document.getElementById('verify-code-btn');
+      btn.disabled = true; btn.textContent = 'Verifying…';
+      otpError('');
+      const { error } = await sb.auth.verifyOtp({ email: otpEmail, token: code, type: 'email' });
+      if (error) {
+        otpError('Invalid or expired code. Try again.');
+        btn.disabled = false; btn.textContent = 'Sign in';
+      }
+      // success: onAuthStateChange SIGNED_IN handles the rest
+    });
+
+    document.getElementById('login-code').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('verify-code-btn').click();
+    });
+
+    document.getElementById('otp-back-btn').addEventListener('click', () => {
+      document.getElementById('otp-code-step').style.display = 'none';
+      document.getElementById('otp-email-step').style.display = '';
+      document.getElementById('login-code').value = '';
+      otpError('');
+    });
+
+    document.getElementById('cfg-sign-out-btn').addEventListener('click', async () => {
+      await sb.auth.signOut();
+      showLoginState();
+    });
+
+    // Auth state handler
+    sb.auth.onAuthStateChange((event, session) => {
+      if (!session?.user) { showLoginState(); return; }
+      bootOnce(session.user);
+    });
+
+    // Version fetch — sets version on login screen and nav; no auth required
+    fetch('/api?action=version').then(r => {
+      const ver = r.headers.get('X-App-Version');
+      if (ver) {
+        const navVer = document.getElementById('app-version');
+        const loginVer = document.getElementById('login-app-version');
+        if (navVer) navVer.textContent = ver;
+        if (loginVer) loginVer.textContent = ver;
+      }
+    }).catch(() => {});
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
+
+  <script src="mynat.js"></script>
+</body>
+
+</html>
