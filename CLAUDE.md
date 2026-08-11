@@ -358,6 +358,18 @@ misleadingly suggesting the account isn't connected.
 failure mode. Realistically hard to hit at personal-observation-history scale (the sync engine's
 own page cap keeps each invocation to a handful of requests), but worth naming when it happens.
 
+**Overview date-range card broke on an actual iPhone** (found from a real device screenshot, not
+simulated at ~540px — this browser session's resize floor never got low enough to catch it): the
+full date range ("May 1, 2025 – Aug 10, 2026", 26 chars) wrapped to 5 lines at the shared
+`.stat-value` size in a ~110px-wide card, and — worse — CSS grid's default `align-items: stretch`
+made the *shorter* Observations/Species cards stretch to match that height too, leaving a big
+empty gap under their numbers. Fixed three ways: `formatShortDate` (`mynat.js`) gives the date
+card its own compact format ("5/1/25 – 8/10/26", 16 chars) separate from `formatDate` (still used
+for single dates elsewhere, where the fuller format reads better and there's more room); the full
+dates are preserved in a `title` tooltip; `#stat-daterange` gets its own smaller font-size
+(smaller still under 420px); `.stats-grid` gets `align-items: start` so a tall card never
+stretches its neighbors regardless of how long a future value might get.
+
 ## Build Status
 
 All 6 of the dev plan's core + refinement phases complete, plus a first pass at Phase 7 polish

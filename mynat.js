@@ -28,6 +28,17 @@ function formatDate(isoDate) {
   });
 }
 
+// Separate from formatDate: the Overview date-range stat card has to fit two
+// of these side by side in a third of a 3-column grid, so "May 1, 2025"
+// (11 chars) needs to be "5/1/25" (6 chars) there — full formatDate is still
+// right for a single date next to a species name (list cards, map popups),
+// where there's room and the fuller format reads better.
+function formatShortDate(isoDate) {
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString(undefined, {
+    year: '2-digit', month: 'numeric', day: 'numeric',
+  });
+}
+
 // Every caller does `const result = await apiFetch(...); if (!result.ok) {...}`
 // — this always resolves to that {ok, ...} shape instead of ever rejecting,
 // so a network failure or a non-JSON response (a Vercel platform crash page,
@@ -271,9 +282,14 @@ function renderStats(stats) {
   _lastStats = stats;
   document.getElementById('stat-total').textContent = stats.total.toLocaleString();
   document.getElementById('stat-species').textContent = stats.speciesCount.toLocaleString();
-  document.getElementById('stat-daterange').textContent = stats.earliest && stats.latest
-    ? `${formatDate(stats.earliest)} – ${formatDate(stats.latest)}`
-    : '–';
+  const dateRangeEl = document.getElementById('stat-daterange');
+  if (stats.earliest && stats.latest) {
+    dateRangeEl.textContent = `${formatShortDate(stats.earliest)} – ${formatShortDate(stats.latest)}`;
+    dateRangeEl.title = `${formatDate(stats.earliest)} – ${formatDate(stats.latest)}`;
+  } else {
+    dateRangeEl.textContent = '–';
+    dateRangeEl.removeAttribute('title');
+  }
   renderCategoryBreakdown();
 }
 

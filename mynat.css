@@ -312,6 +312,10 @@ html, body {
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-bottom: 8px;
+  /* Grid items stretch to the row's tallest item by default — without this,
+     a wrapped date range made the Observations/Species cards stretch to
+     match it too, leaving a big empty gap under those short numbers. */
+  align-items: start;
 }
 
 .stat-card {
@@ -331,6 +335,19 @@ html, body {
   font-size: 1.4rem;
   font-weight: 700;
   color: var(--text);
+}
+
+/* Short text (a count) reads fine at the full .stat-value size; a date
+   range is longer even abbreviated (formatShortDate) and wraps to multiple
+   lines on a narrow phone at that size — noticeably smaller here keeps it
+   to 1-2 lines instead of ballooning the whole card. */
+#stat-daterange {
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+
+@media (max-width: 420px) {
+  #stat-daterange { font-size: .85rem; }
 }
 
 .stat-label {
