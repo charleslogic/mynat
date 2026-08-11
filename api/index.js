@@ -180,6 +180,35 @@ module.exports = async (req, res) => {
                 return res.json({ ok: true, shortcuts: data });
             }
 
+            case 'taxon-search': {
+                // Ad-hoc, one-off group filtering — resolves a free-text name
+                // (e.g. "bees") against iNat's live taxon search so the user can
+                // filter List/Map by any group, not just the curated
+                // mynat_category_shortcuts. Proxied through here (not called
+                // directly from the client) for the same reasons link-inat is:
+                // consistent User-Agent etiquette and error handling via
+                // inatErrorMessage. Doesn't touch the database — the picked
+                // taxon just becomes this session's _listShortcut client-side,
+                // same shape as a curated shortcut, nothing persisted.
+                const q = typeof req.body?.q === 'string' ? req.body.q.trim().slice(0, 60) : '';
+                if (!q) return res.json({ ok: true, results: [] });
+
+                const params = new URLSearchParams({ q, per_page: '10', is_active: 'true' });
+                const resp = await fetch(`${INAT_API}/taxa?${params.toString()}`, {
+                    headers: { 'User-Agent': 'MyNat (https://mynat.charleslogic.com)' },
+                });
+                if (!resp.ok) throw new Error(inatErrorMessage(resp, 'taxon search'));
+                const json = await resp.json();
+                const results = (json.results || []).map(t => ({
+                    id: t.id,
+                    name: t.name,
+                    commonName: t.preferred_common_name || null,
+                    rank: t.rank,
+                    observationsCount: t.observations_count ?? 0,
+                }));
+                return res.json({ ok: true, results });
+            }
+
             case 'link-inat': {
                 const username = (req.body?.username || '').trim();
                 if (!username) return res.status(400).json({ ok: false, error: 'Username required' });

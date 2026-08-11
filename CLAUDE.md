@@ -129,6 +129,7 @@ on all operations. `mynat_category_shortcuts`: `select` open to `authenticated`,
 | `observations` | POST | `{search, categories, shortcut, offset}` — paginated (30/page), `observed_on desc` list. See Detail List below. |
 | `map` | POST | `{search, categories, shortcut}` — all matching lat/lng points (unpaginated to the client; paged past PostgREST's 1000-row cap server-side). See Map below. |
 | `shortcuts` | GET | `{shortcuts: [{label, taxon_id, exclude_taxon_id}]}` from `mynat_category_shortcuts`. See Category Shortcuts below. |
+| `taxon-search` | POST | `{q}` — proxies iNat's live `/v1/taxa` search, `{results: [{id, name, commonName, rank, observationsCount}]}`. See Ad-hoc Taxon Search below. |
 
 ## Sync Engine
 
@@ -335,6 +336,36 @@ Butterflies (116) + Moths-excluding-Butterflies (21) summed to exactly the Lepid
 _listShortcut`, single-select, alongside `_listCategories`, multi-select), so "Insects" +
 "Butterflies" is valid (if redundant). Adding a new shortcut later is purely a SQL insert — no
 code change needed, same as adding a new iNat account doesn't need one.
+
+## Ad-hoc Taxon Search
+
+"One-off, not a permanent tile" filtering by any iNat group — the search box at the start of the
+Quick Picks row (`#taxon-search`). Unlike curated shortcuts, nothing is written to the database:
+picking a result just sets `_listShortcut` directly (same `{taxonId, excludeTaxonId: null}` shape
+a curated shortcut uses) for the current session, and it's gone on clear or reload. This works
+because `_listShortcut` was already generic — `observations`/`map` filter on whatever taxon ID is
+in it regardless of where it came from, so this needed zero server-side filtering changes, only a
+way to resolve a free-text name into a taxon ID.
+
+**`action=taxon-search`** proxies iNat's live `/v1/taxa?q=…` search (debounced 300ms client-side,
+min 2 characters) rather than being called directly from the browser — same reasoning as
+`link-inat`: consistent User-Agent etiquette and error handling via `inatErrorMessage`. Verified
+the response mapping and a resulting filter against real data before shipping: searching "bees"
+surfaces multiple taxonomic levels (order Hymenoptera down to genus *Bombus*), letting the user
+pick whichever level they actually meant, matching the app's core "search at whatever level you
+remember" design goal from Phase 1; picking Anthophila (epifamily, "Bees") correctly returned 20
+real bee observations from the `@mr-natural` account.
+
+**Mutual exclusivity with curated Quick Picks** (`clearAllShortcutSelections`): only one shortcut
+— curated or ad-hoc — is ever active. Picking a curated chip clears the ad-hoc pick's display
+(hides the "🔍 label ✕" pill, shows the search input again); picking an ad-hoc result clears any
+active curated chip's `.active` class. Both paths funnel through the same clear-then-set sequence
+so they can't end up in an inconsistent state.
+
+**No permanent record by design** — an ad-hoc pick can't express a paraphyletic split like Moths
+(no single taxon ID exists for "Lepidoptera minus Papilionoidea"), only genuine single clades.
+That's an intentional scope boundary, not a bug: splits like that are exactly what curated
+Quick Picks (with `exclude_taxon_id`) are for.
 
 ## Error Handling & Loading States
 

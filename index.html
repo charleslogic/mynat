@@ -119,10 +119,19 @@
         <div class="filterbar-chips" id="filterbar-chips"></div>
       </div>
       <!-- Curated shortcuts (Butterflies vs Moths, etc.) — populated from
-           mynat_category_shortcuts via action=shortcuts; hidden until loaded
-           so an empty table doesn't show a bare "Quick picks:" label. -->
-      <div class="filterbar-row" id="filterbar-shortcuts-row" style="display:none">
-        <span class="filterbar-label">Quick picks:</span>
+           mynat_category_shortcuts via action=shortcuts. Curated chips stay
+           hidden until loaded so an empty table doesn't show a bare "Quick
+           picks:" label, but the ad-hoc taxon search is always available. -->
+      <div class="filterbar-row" id="filterbar-shortcuts-row">
+        <div class="taxon-search" id="taxon-search">
+          <input type="text" id="taxon-search-input" placeholder="🔍 Search any group…" autocomplete="off">
+          <div class="taxon-active-pick" id="taxon-active-pick" style="display:none">
+            <span class="taxon-active-pick-label"></span>
+            <button type="button" id="taxon-active-pick-clear" title="Clear">✕</button>
+          </div>
+          <div class="taxon-search-dropdown" id="taxon-search-dropdown"></div>
+        </div>
+        <span class="filterbar-label" id="quick-picks-label" style="display:none">Quick picks:</span>
         <div class="filterbar-chips" id="filterbar-shortcuts"></div>
       </div>
     </div>

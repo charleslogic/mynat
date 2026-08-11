@@ -201,13 +201,24 @@ function initFilterBar() {
 // later purely via the SQL editor (see CLAUDE.md), and hardcoding it
 // anywhere in the frontend would just recreate the drift bug that just got
 // fixed for the category chips. Row stays hidden if the table is empty.
+// Mutual exclusivity across BOTH the curated Quick Pick chips and the ad-hoc
+// taxon search — only one shortcut (curated or one-off) is ever active.
+// Clears the visual state on both surfaces; callers set _listShortcut
+// themselves right after, since what to set it to differs per caller.
+function clearAllShortcutSelections() {
+  document.querySelectorAll('#filterbar-shortcuts .chip').forEach(c => c.classList.remove('active'));
+  if (_adhocTaxonLabel) {
+    _adhocTaxonLabel = null;
+    renderAdhocPick();
+  }
+}
+
 async function loadShortcuts() {
   const result = await apiFetch('shortcuts');
   if (!result.ok || !result.shortcuts.length) return;
 
-  const row = document.getElementById('filterbar-shortcuts-row');
+  document.getElementById('quick-picks-label').style.display = '';
   const chipsEl = document.getElementById('filterbar-shortcuts');
-  row.style.display = '';
 
   result.shortcuts.forEach(s => {
     const chip = document.createElement('div');
@@ -216,7 +227,7 @@ async function loadShortcuts() {
 
     chip.addEventListener('click', () => {
       const wasActive = chip.classList.contains('active');
-      chipsEl.querySelectorAll('.chip').forEach(c => c.classList.remove('active')); // single-select
+      clearAllShortcutSelections();
       if (wasActive) {
         _listShortcut = null;
       } else {
@@ -228,6 +239,109 @@ async function loadShortcuts() {
 
     chipsEl.appendChild(chip);
   });
+}
+
+// ── Ad-hoc taxon search — "one-off, not a permanent tile" filtering by any
+// iNat group, not just the curated Quick Picks. Resolves through
+// action=taxon-search (server-proxied, see api/index.js) and just becomes
+// this session's _listShortcut — nothing persisted, gone on clear/reload.
+let _adhocTaxonLabel = null;
+let _taxonSearchTimer = null;
+
+function renderAdhocPick() {
+  const input = document.getElementById('taxon-search-input');
+  const pickEl = document.getElementById('taxon-active-pick');
+  if (_adhocTaxonLabel) {
+    input.style.display = 'none';
+    pickEl.style.display = '';
+    pickEl.querySelector('.taxon-active-pick-label').textContent = `🔍 ${_adhocTaxonLabel}`;
+  } else {
+    input.style.display = '';
+    pickEl.style.display = 'none';
+  }
+}
+
+function closeTaxonDropdown() {
+  document.getElementById('taxon-search-dropdown').classList.remove('open');
+}
+
+function selectAdhocTaxon(t) {
+  clearAllShortcutSelections();
+  _listShortcut = { taxonId: t.id, excludeTaxonId: null };
+  _adhocTaxonLabel = t.commonName || t.name;
+  renderAdhocPick();
+  closeTaxonDropdown();
+  document.getElementById('taxon-search-input').value = '';
+  onFiltersChanged();
+}
+
+function clearAdhocTaxon() {
+  _listShortcut = null;
+  _adhocTaxonLabel = null;
+  renderAdhocPick();
+  onFiltersChanged();
+}
+
+function renderTaxonDropdown(results) {
+  const dropdown = document.getElementById('taxon-search-dropdown');
+  dropdown.innerHTML = '';
+  if (!results.length) {
+    dropdown.classList.remove('open');
+    return;
+  }
+
+  results.forEach(t => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'taxon-result';
+
+    const name = document.createElement('div');
+    name.className = 'taxon-result-name';
+    name.textContent = t.commonName || t.name;
+    btn.appendChild(name);
+
+    if (t.commonName) {
+      const sci = document.createElement('div');
+      sci.className = 'taxon-result-sci';
+      sci.textContent = t.name;
+      btn.appendChild(sci);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'taxon-result-meta';
+    meta.textContent = `${t.rank} · ${t.observationsCount.toLocaleString()} on iNat`;
+    btn.appendChild(meta);
+
+    btn.addEventListener('click', () => selectAdhocTaxon(t));
+    dropdown.appendChild(btn);
+  });
+
+  dropdown.classList.add('open');
+}
+
+function initTaxonSearch() {
+  const wrap = document.getElementById('taxon-search');
+  const input = document.getElementById('taxon-search-input');
+  if (!wrap || !input) return;
+
+  input.addEventListener('input', () => {
+    clearTimeout(_taxonSearchTimer);
+    const q = input.value.trim();
+    if (q.length < 2) { closeTaxonDropdown(); return; }
+    _taxonSearchTimer = setTimeout(async () => {
+      const result = await apiFetch('taxon-search', {
+        method: 'POST',
+        body: JSON.stringify({ q }),
+      });
+      renderTaxonDropdown(result.ok ? result.results : []);
+    }, 300);
+  });
+
+  document.addEventListener('click', e => {
+    if (!wrap.contains(e.target)) closeTaxonDropdown();
+  });
+
+  document.getElementById('taxon-active-pick-clear').addEventListener('click', clearAdhocTaxon);
 }
 
 function setSyncStatus(text) {
@@ -815,6 +929,7 @@ window._bootApp = function (user) {
   initThemeToggle();
   initFilterBar();
   loadShortcuts();
+  initTaxonSearch();
   initConnectFlow();
   initSyncFlow();
   initStatsToggle();
