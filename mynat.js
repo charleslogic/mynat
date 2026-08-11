@@ -106,6 +106,30 @@ function initUserMenu(user) {
   });
 }
 
+// Actual class-toggling already happened before first paint (the no-flash
+// script in index.html's <head>, since document.body doesn't exist that
+// early — see :root.light in mynat.css). This just handles later toggles
+// from the UI and keeps localStorage/labels in sync.
+function setTheme(on) {
+  document.documentElement.classList.toggle('light', on);
+  localStorage.setItem('mynat_light', on ? '1' : '0');
+  document.getElementById('theme-emoji').textContent = on ? '🌙' : '☀️';
+  document.getElementById('theme-label').textContent = on ? 'Dark Mode' : 'Light Mode';
+}
+
+function initThemeToggle() {
+  const input = document.getElementById('theme-toggle-input');
+  if (!input) return;
+  // Sync the toggle/labels to whatever the head script already applied —
+  // this function runs after boot, the class was set before first paint.
+  const isLight = document.documentElement.classList.contains('light');
+  input.checked = isLight;
+  document.getElementById('theme-emoji').textContent = isLight ? '🌙' : '☀️';
+  document.getElementById('theme-label').textContent = isLight ? 'Dark Mode' : 'Light Mode';
+
+  input.addEventListener('change', () => setTheme(input.checked));
+}
+
 // Shared by Detail List and Map — filter state lives here so both tabs
 // reuse the same search/category inputs without duplicating the wiring.
 let _listSearch = '';
@@ -788,6 +812,7 @@ function initMapClusterToggle() {
 window._bootApp = function (user) {
   initTabs();
   initUserMenu(user);
+  initThemeToggle();
   initFilterBar();
   loadShortcuts();
   initConnectFlow();

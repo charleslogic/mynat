@@ -31,7 +31,11 @@
   --tax-unknown: #7B8099;
 }
 
-body.light {
+/* Applied to <html> (document.documentElement), not <body> — the no-flash
+   theme script in index.html's <head> has to run before <body> exists, so
+   it can only target the root element. :root.light and html.light are the
+   same selector; :root matches the base variable declarations above. */
+:root.light {
   --bg: #F0F2F8;
   --card: #FFFFFF;
   --card2: #F5F7FF;
@@ -276,6 +280,58 @@ body {
   font-family: inherit;
 }
 .cfg-link-btn:hover { color: var(--text); }
+
+.cfg-divider { height: 1px; background: var(--border); margin: 10px 0; }
+
+.cfg-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  font-family: 'Space Mono', monospace;
+}
+
+.theme-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+}
+
+.theme-toggle-left { display: flex; align-items: center; gap: 10px; font-size: .85rem; font-weight: 600; }
+.theme-toggle-emoji { font-size: 18px; }
+
+.toggle-wrap { position: relative; width: 42px; height: 25px; flex-shrink: 0; }
+.toggle-wrap input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 99px;
+  background: var(--border);
+  cursor: pointer;
+  transition: background .2s;
+}
+.toggle-wrap input:checked + .toggle-track { background: var(--accent); }
+
+.toggle-thumb {
+  position: absolute;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: transform .2s;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+  pointer-events: none;
+}
+.toggle-wrap input:checked ~ .toggle-thumb { transform: translateX(17px); }
 
 /* ── Tabs ── */
 .tabbar {

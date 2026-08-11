@@ -3,6 +3,22 @@
 
 <head>
   <meta charset="UTF-8">
+  <!-- Applies the saved/system theme before anything paints — must be a
+       synchronous classic script this early in <head>, not the deferred
+       module script at the bottom of <body> (which runs after the dark-
+       default login screen has already painted, causing a visible flash
+       for anyone who's chosen light mode). document.body doesn't exist yet
+       at this point in <head>, so this targets <html> (document.documentElement)
+       instead — see :root.light in mynat.css, not body.light. -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('mynat_light');
+        var light = saved !== null ? saved === '1' : window.matchMedia('(prefers-color-scheme: light)').matches;
+        if (light) document.documentElement.classList.add('light');
+      } catch (e) {}
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -69,6 +85,22 @@
 
     <div id="config-card">
       <div class="cfg-email" id="cfg-email"></div>
+      <div class="cfg-divider"></div>
+      <div class="cfg-section">
+        <div class="cfg-section-label">Appearance</div>
+        <div class="theme-toggle-row">
+          <div class="theme-toggle-left">
+            <span class="theme-toggle-emoji" id="theme-emoji">☀️</span>
+            <span id="theme-label">Light Mode</span>
+          </div>
+          <label class="toggle-wrap">
+            <input type="checkbox" id="theme-toggle-input">
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+        </div>
+      </div>
+      <div class="cfg-divider"></div>
       <button class="cfg-link-btn" id="cfg-sign-out-btn">↩ Sign out</button>
     </div>
 

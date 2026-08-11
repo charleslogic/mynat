@@ -456,6 +456,36 @@ server's own page size in the `observations` action; the server enforces its act
 regardless of what the client assumes. Both the List and Gallery Load More buttons share the same
 label, updated in the one place (`loadObservations`) both read from.
 
+## Light/Dark Toggle
+
+Modeled on `hab`'s theme toggle (same markup shape — `.theme-toggle-row`/`.toggle-wrap`/
+`.toggle-track`/`.toggle-thumb` — adapted to MyNat's own `--accent` green instead of hab's
+hardcoded teal), in the `#config-card` user menu under an "Appearance" section.
+
+**No-flash theme script** (`index.html`, `<head>`, before `<link rel="stylesheet">`): a
+synchronous *classic* script, not the deferred `type="module"` script at the bottom of `<body>`.
+The deferred script runs after the dark-default login screen has already painted — applying the
+theme there would cause a visible flash to light for anyone who's chosen it. This one runs before
+anything paints, but `document.body` doesn't exist yet that early in `<head>`, so it targets
+`document.documentElement` (`<html>`) instead — `mynat.css` uses `:root.light`, not hab's
+`body.light`, to match (`:root` and `html` are the same element; `:root` also matches where the
+base `--bg`/`--card`/etc. variables are declared, so it reads as the more obviously-related
+selector). Falls back to `prefers-color-scheme` when there's no saved `mynat_light` value yet, so
+a first-time visitor gets their OS-level preference rather than always defaulting to dark.
+
+**Runtime toggle** (`mynat.js: setTheme`/`initThemeToggle`) only handles later changes and
+syncing the UI (checkbox/emoji/label) to whatever the head script already applied at boot — the
+actual first-paint class-toggling already happened before `_bootApp` ever runs.
+
+`--accent` and the `--tax-*` category-color swatches are deliberately *not* overridden in
+`:root.light` — they're legible enough on both backgrounds, and staying constant keeps the
+category colors recognizable regardless of theme (a Bird dot is the same blue in the Overview
+breakdown, on List cards, and on Map markers, whichever theme you're in). The two hardcoded colors
+in `.map-popup-sci`/`.map-popup-date` (`#666`/`#888`, not `var(--muted)`) are also intentionally
+theme-invariant: Leaflet popups render in their own white bubble regardless of the app's theme, so
+they don't pick up our CSS variables at all — using `var(--muted)` there would be pale-gray text
+meant for a dark background showing up on Leaflet's always-white popup instead.
+
 ## Build Status
 
 All 6 of the dev plan's core + refinement phases complete, plus a first pass at Phase 7 polish
