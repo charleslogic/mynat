@@ -360,8 +360,16 @@ function initTaxonSearch() {
 
   // position:fixed coordinates are computed once, on open — if the page (or
   // window) scrolls/resizes while it's open, just close it rather than
-  // tracking and repositioning on every scroll event.
-  window.addEventListener('scroll', closeTaxonDropdown, true);
+  // tracking and repositioning on every scroll event. Capture-phase on
+  // window means this fires for ANY scroll on the page, though — including
+  // scrolling the dropdown's own results (it can be taller than its
+  // max-height). Without excluding that, scrolling the results closed them
+  // immediately, on every input: wheel, scrollbar click, scrollbar drag,
+  // and the touch equivalent on mobile Safari.
+  window.addEventListener('scroll', e => {
+    if (dropdown.contains(e.target)) return;
+    closeTaxonDropdown();
+  }, true);
   window.addEventListener('resize', closeTaxonDropdown);
 
   document.getElementById('taxon-active-pick-clear').addEventListener('click', clearAdhocTaxon);

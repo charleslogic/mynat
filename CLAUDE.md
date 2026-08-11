@@ -390,6 +390,23 @@ the dropdown rendered as a floating overlay over the list, selecting a result co
 and showed the "🔍 label ✕" pill, and the list underneath stayed fully visible and scrollable
 throughout — the whole failure mode was gone.
 
+**Second bug from that same `scroll`/`resize` listener (fixed, also found live):** reported as
+"the list shuts" on any scroll attempt — wheel, scrollbar click, scrollbar drag, touch, all had
+the same effect — with clicking an actual result working fine. Initially misread as the
+*observation* list breaking; it was actually the *dropdown's own results* — capture-phase
+(`true`) on `window` means the `scroll` listener fires for scroll events targeting **any**
+descendant, not just the page/`window` itself, capture delivery doesn't depend on whether the
+event bubbles. So the moment you tried to scroll the dropdown's own overflowing result list (it
+can hold more than fits in its `max-height`), that same listener saw it as "the page scrolled,
+the dropdown's position is stale" and closed it — on every scroll input, since wheel/scrollbar/
+touch all fire the same `scroll` event. Reproduced exactly on the live (pre-fix) page before
+writing the fix: opening the dropdown and scrolling within it closed it immediately, every time.
+Fixed with a one-line guard — `if (dropdown.contains(e.target)) return;` — before the existing
+close call, so scrolling the dropdown's own content is left alone while scrolling anything else
+on the page still closes it as intended. (A same-session `min-height: 0` change to `.tabpanel`,
+made while this was still misdiagnosed as an observation-list bug, was reverted once the real
+cause was found — it tested as having no measurable effect and wasn't tied to anything real.)
+
 ## Error Handling & Loading States
 
 **`apiFetch` never rejects** (`mynat.js`) — wrapped in try/catch, and checks the response
