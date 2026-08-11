@@ -681,12 +681,21 @@ body {
 .map-popup-link:hover { text-decoration: underline; }
 
 /* ── Photo gallery modal ── */
+/* position:fixed positions relative to the viewport, not body — so this
+   doesn't inherit body's env(safe-area-inset-*) padding (added earlier for
+   the header/status-bar overlap) at all. Same bug, different element: the
+   sticky close button rendered right under the status bar/battery icon in
+   PWA mode. Needs its own copy of the same padding. */
 #gallery-modal {
   position: fixed;
   inset: 0;
   z-index: 9000;
   background: var(--bg);
   overflow-y: auto;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 .gallery-header {

@@ -437,6 +437,15 @@ Gallery can never show different data. Observations without a photo are skipped 
 pure-image grid). Each cell links out to the real iNat observation page, same as list cards and
 map popups.
 
+**Same status-bar overlap bug as the main header, on a different element.** `#gallery-modal` is
+its own `position: fixed; inset: 0` overlay — fixed positioning is relative to the viewport, not
+`body`, so it doesn't inherit `body`'s `env(safe-area-inset-*)` padding at all (added earlier for
+the header). In PWA mode the sticky close button rendered right under the status bar/battery
+icon. Fixed by giving `#gallery-modal` its own copy of the same safe-area padding — any future
+`position: fixed; inset: 0` overlay (there's currently one other, `#login-gate`, which hasn't hit
+this in practice since its content is centered rather than glued to an edge) will need the same
+treatment, since `body`'s padding structurally cannot reach it.
+
 ## Build Status
 
 All 6 of the dev plan's core + refinement phases complete, plus a first pass at Phase 7 polish
