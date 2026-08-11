@@ -427,7 +427,11 @@ function buildObsCard(obs) {
   card.target = '_blank';
   card.rel = 'noopener';
 
-  const thumbUrl = obs.photos?.[0]?.square;
+  // "square" is a native 75x75px image — displayed at 56 CSS px, that's a
+  // 2x+ upscale on any Retina/high-DPI phone screen (168 physical px
+  // needed at 3x), which is exactly what was showing up as graininess.
+  // "small" is 180x240, comfortably covers it.
+  const thumbUrl = obs.photos?.[0]?.small;
   if (thumbUrl) {
     const img = document.createElement('img');
     img.className = 'obs-thumb';
@@ -472,6 +476,10 @@ function buildObsCard(obs) {
 
 let _listOffset = 0;
 let _listLoading = false;
+let _listHasMore = false;
+// Mirrors what's rendered in #obs-list — the gallery modal is just this same
+// data shown as an image grid instead of cards, not a separate fetch/dataset.
+let _loadedObservations = [];
 
 async function loadObservations(reset) {
   if (_listLoading) return;
@@ -484,6 +492,7 @@ async function loadObservations(reset) {
 
   if (reset) {
     _listOffset = 0;
+    _loadedObservations = [];
     listEl.innerHTML = '';
     emptyEl.style.display = 'none';
     metaEl.textContent = 'Loading…';
@@ -512,6 +521,7 @@ async function loadObservations(reset) {
   result.observations.forEach(obs => frag.appendChild(buildObsCard(obs)));
   listEl.appendChild(frag);
 
+  _loadedObservations.push(...result.observations);
   _listOffset = result.nextOffset;
 
   const hasFilters = hasActiveFilters();
@@ -526,17 +536,79 @@ async function loadObservations(reset) {
     metaEl.textContent = `${result.total.toLocaleString()} observation${result.total === 1 ? '' : 's'}${hasFilters ? ' matched' : ''}`;
   }
 
+  _listHasMore = result.hasMore;
   if (loadMoreBtn) {
     loadMoreBtn.style.display = result.hasMore ? '' : 'none';
     loadMoreBtn.disabled = false;
     loadMoreBtn.textContent = 'Load more';
   }
+  if (_galleryOpen) renderGalleryGrid();
 }
 
 function initListLoadMore() {
   const btn = document.getElementById('list-load-more-btn');
   if (!btn) return;
   btn.addEventListener('click', () => loadObservations(false));
+}
+
+// ── Photo gallery modal — same data as #obs-list, shown as an image grid
+// instead of cards (matches nam's Gallery feature). Not a separate fetch:
+// opening it just renders whatever's already in _loadedObservations, and its
+// own "Load more" reuses loadObservations(false), which re-renders the grid
+// too if the gallery happens to be open at the time.
+let _galleryOpen = false;
+
+function buildGalleryCell(obs) {
+  const cell = document.createElement('a');
+  cell.className = 'gallery-cell';
+  cell.href = `https://www.inaturalist.org/observations/${obs.inat_id}`;
+  cell.target = '_blank';
+  cell.rel = 'noopener';
+
+  const img = document.createElement('img');
+  img.src = obs.photos[0].small;
+  img.alt = '';
+  img.loading = 'lazy';
+  cell.appendChild(img);
+
+  const caption = document.createElement('div');
+  caption.className = 'gallery-cell-caption';
+  caption.textContent = obs.common_name || obs.scientific_name || 'Unknown';
+  cell.appendChild(caption);
+
+  return cell;
+}
+
+function renderGalleryGrid() {
+  const grid = document.getElementById('gallery-grid');
+  grid.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  // Observations without a photo don't make sense in an image grid (they do
+  // in the card list, with a placeholder icon) — skipped here only.
+  _loadedObservations
+    .filter(obs => obs.photos?.[0]?.small)
+    .forEach(obs => frag.appendChild(buildGalleryCell(obs)));
+  grid.appendChild(frag);
+
+  document.getElementById('gallery-load-more-btn').style.display = _listHasMore ? '' : 'none';
+}
+
+function initGallery() {
+  const btn = document.getElementById('gallery-btn');
+  if (!btn) return;
+
+  btn.addEventListener('click', () => {
+    _galleryOpen = true;
+    renderGalleryGrid();
+    document.getElementById('gallery-modal').style.display = '';
+  });
+
+  document.getElementById('gallery-close-btn').addEventListener('click', () => {
+    _galleryOpen = false;
+    document.getElementById('gallery-modal').style.display = 'none';
+  });
+
+  document.getElementById('gallery-load-more-btn').addEventListener('click', () => loadObservations(false));
 }
 
 // ── Map tab ────────────────────────────────────────────────────────────
@@ -702,5 +774,6 @@ window._bootApp = function (user) {
   initStatsToggle();
   initListLoadMore();
   initMapClusterToggle();
+  initGallery();
   loadProfile();
 };

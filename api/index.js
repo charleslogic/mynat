@@ -296,10 +296,14 @@ module.exports = async (req, res) => {
                 while (true) {
                     let query = db
                         .from('mynat_observations')
-                        // thumb: pulls just the square photo URL out of the photos jsonb
-                        // array instead of the whole array (5 URLs/row) — the map can have
-                        // ~1700+ points in one response, so this keeps payload lean.
-                        .select('inat_id, latitude, longitude, iconic_taxon, common_name, scientific_name, observed_on, thumb:photos->0->>square')
+                        // thumb: pulls just one photo URL out of the photos jsonb array
+                        // instead of the whole array (5 URLs/row) — the map can have
+                        // ~1700+ points in one response, so this keeps that payload lean.
+                        // "medium" (not "square"/75px) because the popup displays it at
+                        // up to 220px wide — but this is basically free either way, since
+                        // only the URL string is in the initial payload; the actual image
+                        // bytes are only fetched when a popup is opened, one at a time.
+                        .select('inat_id, latitude, longitude, iconic_taxon, common_name, scientific_name, observed_on, thumb:photos->0->>medium')
                         .not('latitude', 'is', null)
                         .not('longitude', 'is', null)
                         .range(offset, offset + PAGE_SIZE - 1);

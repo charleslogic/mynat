@@ -261,10 +261,10 @@ client — a map needs the full filtered set to cluster/plot correctly) but page
 1000-row cap server-side the same way `stats` does, using the same `parseFilterInput`/
 `applyObservationFilters` helpers as `observations` so category/search filtering behaves
 identically across List and Map. Only `latitude`/`longitude` non-null rows are included (2 of
-1678 in the test account lack coordinates). The `thumb` field pulls just the square photo URL out
-of the `photos` jsonb array via a PostgREST path selector (`thumb:photos->0->>square`) instead of
-the whole array, keeping a ~1700-point response reasonably lean — verified this selector syntax
-against live data before deploying.
+1678 in the test account lack coordinates). The `thumb` field pulls just one photo URL out of the
+`photos` jsonb array via a PostgREST path selector (`thumb:photos->0->>medium` — was `square`
+originally, see Photo Sizes below for why) instead of the whole array, keeping a ~1700-point
+response reasonably lean — verified this selector syntax against live data before deploying.
 
 **Leaflet init** (`mynat.js: initMap`): lazy — created on first Map-tab activation, guarded so a
 second visit doesn't re-init (Leaflet throws if you call `L.map()` on an already-initialized
@@ -408,7 +408,34 @@ viewport), with the original `height: 100%` kept as the first declaration so bro
 `dvh` support fall back to it instead of getting an invalid rule. Diagnosed from the pattern
 across screenshots (not independently reproduced — desktop Chrome doesn't have Safari's
 chrome-collapse behavior to test against) — flagged as the most likely explanation rather than a
-confirmed root cause; worth another round of device screenshots to confirm.
+confirmed root cause; worth another round of device screenshots to confirm. **Confirmed fixed**
+on a follow-up real-device report.
+
+## Photo Sizes
+
+iNat's photo URLs encode size as a filename segment (`derivePhotoUrls` in `api/index.js`, Phase
+2) — `square` (75×75, verified by parsing the actual JPEG header, not assumed), `small`
+(180×240), `medium` (~500px long edge), `large`, `original`. List cards and the gallery grid
+originally used `square`, which read as grainy on any Retina/high-DPI phone: a 56 CSS px card
+thumbnail needs ~168 physical px at 3x device pixel ratio, a 2×+ upscale of a 75px source. Now
+`small`, which comfortably covers that. Map popups display up to 220 CSS px wide, so they use
+`medium` instead — no real cost to going bigger there since only the URL string is in the initial
+map payload (`thumb:photos->0->>medium`); the actual image bytes are fetched on demand, one at a
+time, only when a popup is actually opened.
+
+## Gallery
+
+A photo-grid modal on the List tab (`#gallery-btn` → `#gallery-modal`), modeled on `nam`'s
+Gallery feature at the user's request. **Not a separate fetch or dataset** — `_loadedObservations`
+(`mynat.js`) mirrors whatever's accumulated in `#obs-list` across `loadObservations` calls
+(reset on a fresh filter, appended on "Load more"), and the gallery is just that same array
+rendered as an image grid (`renderGalleryGrid`/`buildGalleryCell`) instead of cards. Its own
+"Load more" button reuses `loadObservations(false)` directly — `loadObservations` re-renders the
+gallery grid too if it happens to be open (`_galleryOpen`) when a load completes, so List and
+Gallery can never show different data. Observations without a photo are skipped in the grid
+(there's a placeholder icon for that case in card view, but no sensible placeholder in a
+pure-image grid). Each cell links out to the real iNat observation page, same as list cards and
+map popups.
 
 ## Build Status
 
