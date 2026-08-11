@@ -481,6 +481,18 @@ let _listHasMore = false;
 // data shown as an image grid instead of cards, not a separate fetch/dataset.
 let _loadedObservations = [];
 
+// Mirrors api/index.js's observations-action PAGE_SIZE — used only to show
+// "how many will load next" on the button, not sent to the server (the
+// server enforces its own page size regardless).
+const LIST_PAGE_SIZE = 30;
+
+function loadMoreLabel(total) {
+  const remaining = Math.max(0, total - _loadedObservations.length);
+  if (remaining === 0) return 'Load more';
+  const nextBatch = Math.min(LIST_PAGE_SIZE, remaining);
+  return `Load ${nextBatch} more (${remaining.toLocaleString()} left)`;
+}
+
 async function loadObservations(reset) {
   if (_listLoading) return;
   _listLoading = true;
@@ -533,15 +545,24 @@ async function loadObservations(reset) {
     metaEl.textContent = '';
   } else {
     emptyEl.style.display = 'none';
-    metaEl.textContent = `${result.total.toLocaleString()} observation${result.total === 1 ? '' : 's'}${hasFilters ? ' matched' : ''}`;
+    const loadedCount = _loadedObservations.length;
+    // Once everything matching is loaded, "Showing N of N" is just noise —
+    // collapses to the plain total.
+    const countLabel = loadedCount >= result.total
+      ? `${result.total.toLocaleString()} observation${result.total === 1 ? '' : 's'}`
+      : `Showing ${loadedCount.toLocaleString()} of ${result.total.toLocaleString()} observations`;
+    metaEl.textContent = `${countLabel}${hasFilters ? ' matched' : ''}`;
   }
 
   _listHasMore = result.hasMore;
+  const loadMoreText = loadMoreLabel(result.total);
   if (loadMoreBtn) {
     loadMoreBtn.style.display = result.hasMore ? '' : 'none';
     loadMoreBtn.disabled = false;
-    loadMoreBtn.textContent = 'Load more';
+    loadMoreBtn.textContent = loadMoreText;
   }
+  const galleryLoadMoreBtn = document.getElementById('gallery-load-more-btn');
+  if (galleryLoadMoreBtn) galleryLoadMoreBtn.textContent = loadMoreText;
   if (_galleryOpen) renderGalleryGrid();
 }
 

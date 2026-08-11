@@ -446,6 +446,16 @@ icon. Fixed by giving `#gallery-modal` its own copy of the same safe-area paddin
 this in practice since its content is centered rather than glued to an edge) will need the same
 treatment, since `body`'s padding structurally cannot reach it.
 
+**Loading progress** (`mynat.js: loadMoreLabel`): the List meta line now reads "Showing 30 of
+1,680 observations" while more remain, collapsing to the plain total ("1,680 observations") once
+everything matching is loaded — "Showing 1,680 of 1,680" would just be noise. The Load More
+button shows what clicking it will actually do: "Load 30 more (1,650 left)", down to the correct
+partial final batch size ("Load 15 more (15 left)") rather than always claiming a full page.
+`LIST_PAGE_SIZE` (30) is a client-side display constant only, mirroring — not driving — the
+server's own page size in the `observations` action; the server enforces its actual page size
+regardless of what the client assumes. Both the List and Gallery Load More buttons share the same
+label, updated in the one place (`loadObservations`) both read from.
+
 ## Build Status
 
 All 6 of the dev plan's core + refinement phases complete, plus a first pass at Phase 7 polish
