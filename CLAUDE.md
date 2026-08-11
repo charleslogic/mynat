@@ -384,7 +384,19 @@ adding the same `env(safe-area-inset-*)` padding to `body`, but kept `html`/`bod
 a definite `100%` rather than copying hab's `min-height` — MyNat's `#app` is a fixed-viewport app
 shell relying on `height: 100%` propagating down a definite-height ancestor chain (unlike hab,
 which is a normal scrolling page with no such dependency); `min-height` would make that chain
-`auto` and risk breaking the app-shell layout instead.
+`auto` and risk breaking the app-shell layout instead. Confirmed fixed on a follow-up real-device
+screenshot — logo sits properly below the status bar now.
+
+**Overview had a large dead gap of background below its content**, flagged from the same
+follow-up screenshot (installed-PWA mode has no browser chrome eating into the available height,
+making this more visible than it would be in a regular tab). Overview's content — the connect
+prompt or the dashboard — is a bounded, fairly short block, nowhere near tall enough to fill a
+modern phone's viewport, unlike Map (canvas fills available space) or List (paginated, keeps
+growing) — but `.tabpanel` is `flex:1`, stretching Overview to the same full height regardless.
+Fixed by making `#tab-overview.active` specifically (not the other tabs) a centered flex column
+(`justify-content: center`) instead of the shared `display: block` — `overflow: auto` is still
+inherited from `.tabpanel`, so it still scrolls normally if content ever does exceed the
+viewport.
 
 ## Build Status
 
