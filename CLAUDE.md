@@ -368,7 +368,23 @@ card its own compact format ("5/1/25 – 8/10/26", 16 chars) separate from `form
 for single dates elsewhere, where the fuller format reads better and there's more room); the full
 dates are preserved in a `title` tooltip; `#stat-daterange` gets its own smaller font-size
 (smaller still under 420px); `.stats-grid` gets `align-items: start` so a tall card never
-stretches its neighbors regardless of how long a future value might get.
+stretches its neighbors regardless of how long a future value might get. Confirmed fixed on a
+real iPhone screenshot after deploying — date range now fits on one line, all three cards the
+same height.
+
+**Header overlapped the iOS status bar** on the same real-device screenshots — the "🌿 MyNat"
+logo rendered right under the status bar clock instead of below it, on all three tabs. The app is
+installed as a home-screen PWA (`display: standalone` in `manifest.json`, confirmed by the
+screenshots showing no Safari chrome), and with `viewport-fit=cover` in the viewport meta tag,
+iOS draws the page edge-to-edge under the notch/status bar unless the page explicitly reserves
+that space. `hab` already handles this (`padding: env(safe-area-inset-*)` on `body`) but MyNat
+never had it — a genuine Phase 0 gap, invisible in a regular browser tab (where Safari's own
+chrome already reserves the space) and only visible once installed to the home screen. Fixed by
+adding the same `env(safe-area-inset-*)` padding to `body`, but kept `html`/`body`'s `height` as
+a definite `100%` rather than copying hab's `min-height` — MyNat's `#app` is a fixed-viewport app
+shell relying on `height: 100%` propagating down a definite-height ancestor chain (unlike hab,
+which is a normal scrolling page with no such dependency); `min-height` would make that chain
+`auto` and risk breaking the app-shell layout instead.
 
 ## Build Status
 

@@ -52,6 +52,22 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Installed as a home-screen PWA (manifest.json + apple-mobile-web-app-*
+   meta tags), the page draws edge-to-edge under the iOS status bar/notch —
+   without this, the header logo renders right under the status bar clock,
+   not below it. Matches hab's pattern (the only other app in this suite
+   that hit this) — but kept as `height` (not hab's `min-height`), since
+   #app below relies on a definite-height ancestor chain for its own
+   height:100% (a fixed-viewport app shell, unlike hab's normal scrolling
+   page). box-sizing:border-box (set globally above) keeps this padding
+   inside that 100% budget rather than adding to it. */
+body {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
 /* ── Login gate (same structure/behavior as hab/wm/annoyed) ── */
 #login-gate {
   position: fixed;
