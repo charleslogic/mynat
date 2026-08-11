@@ -571,7 +571,7 @@ body {
 .filterbar-chips { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* ── Ad-hoc taxon search ("one-off, not a permanent tile") ── */
-.taxon-search { position: relative; flex-shrink: 0; }
+.taxon-search { flex-shrink: 0; }
 
 /* Overrides the generic .filterbar input[type="text"] (flex:1; min-width:140px)
    — this one sits alongside the Quick Picks label/chips in the same row and
@@ -606,12 +606,16 @@ body {
   padding: 2px;
 }
 
+/* position:fixed with top/left set via JS (positionTaxonDropdown in
+   mynat.js), not position:absolute nested in .taxon-search — this element
+   lives outside #app entirely now specifically to avoid .filterbar-row's
+   overflow-x:auto (which implicitly forces overflow-y:auto too — CSS
+   doesn't allow one axis auto and the other visible) clipping/scrolling it
+   inside the row's own tiny height instead of floating over the page. */
 .taxon-search-dropdown {
   display: none;
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
+  position: fixed;
+  z-index: 9200;
   width: 280px;
   max-height: 320px;
   overflow-y: auto;

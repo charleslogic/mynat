@@ -367,6 +367,29 @@ so they can't end up in an inconsistent state.
 That's an intentional scope boundary, not a bug: splits like that are exactly what curated
 Quick Picks (with `exclude_taxon_id`) are for.
 
+**Dropdown bug (fixed, found live in production):** `#taxon-search-dropdown` originally lived
+nested inside `.taxon-search`/`.filterbar-row`, positioned with `position: absolute`. Reported as
+"the search blocks the list from showing" on mobile and "a scrollbar appears, scroll to see it
+one line at a time" on desktop — confirmed live: `.filterbar-row`'s `overflow-x: auto` was
+forcing `overflow-y: auto` too (CSS won't allow one axis `auto` and the other `visible` — the
+`visible` one silently computes to `auto` instead), so the open dropdown (up to 320px tall) was
+being clipped and internally scrolled inside the row's own ~37px height instead of floating over
+the page below it — `clientHeight: 37` vs `scrollHeight: 363`, confirmed via
+`getComputedStyle`/`getBoundingClientRect` on the live page before writing the fix.
+
+Fixed by moving `#taxon-search-dropdown` out of `.taxon-search` entirely — it's now a top-level
+element (sibling of `#gallery-modal`, outside `#app`), `position: fixed` with `top`/`left` set by
+`mynat.js: positionTaxonDropdown()` from `#taxon-search-input`'s live `getBoundingClientRect()`
+each time it opens, sidestepping the ancestor-overflow-clipping problem entirely rather than
+fighting it. Two follow-on adjustments this move required: the "click outside to close" handler
+now has to explicitly treat clicks inside the (no-longer-nested) dropdown as "inside" too, or
+clicking a result would look like an outside click; and since the fixed position is computed
+once on open, a `scroll`/`resize` listener just closes the dropdown rather than trying to track
+and reposition it continuously. Verified the fix by patching the live page before committing:
+the dropdown rendered as a floating overlay over the list, selecting a result correctly filtered
+and showed the "🔍 label ✕" pill, and the list underneath stayed fully visible and scrollable
+throughout — the whole failure mode was gone.
+
 ## Error Handling & Loading States
 
 **`apiFetch` never rejects** (`mynat.js`) — wrapped in try/catch, and checks the response

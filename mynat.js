@@ -265,6 +265,18 @@ function closeTaxonDropdown() {
   document.getElementById('taxon-search-dropdown').classList.remove('open');
 }
 
+// The dropdown is position:fixed and lives outside #app (see index.html for
+// why — .filterbar-row's overflow-x:auto was clipping/scrolling it inside
+// the row's own tiny height otherwise), so its position has to be computed
+// from the input's actual location rather than a CSS-only anchor.
+function positionTaxonDropdown() {
+  const input = document.getElementById('taxon-search-input');
+  const dropdown = document.getElementById('taxon-search-dropdown');
+  const r = input.getBoundingClientRect();
+  dropdown.style.top = `${r.bottom + 6}px`;
+  dropdown.style.left = `${r.left}px`;
+}
+
 function selectAdhocTaxon(t) {
   clearAllShortcutSelections();
   _listShortcut = { taxonId: t.id, excludeTaxonId: null };
@@ -316,12 +328,14 @@ function renderTaxonDropdown(results) {
     dropdown.appendChild(btn);
   });
 
+  positionTaxonDropdown();
   dropdown.classList.add('open');
 }
 
 function initTaxonSearch() {
   const wrap = document.getElementById('taxon-search');
   const input = document.getElementById('taxon-search-input');
+  const dropdown = document.getElementById('taxon-search-dropdown');
   if (!wrap || !input) return;
 
   input.addEventListener('input', () => {
@@ -337,9 +351,18 @@ function initTaxonSearch() {
     }, 300);
   });
 
+  // The dropdown lives outside #taxon-search now (see index.html), so a
+  // click inside it must NOT count as "outside" — otherwise clicking
+  // anywhere in the results (even just to scroll) would close it instantly.
   document.addEventListener('click', e => {
-    if (!wrap.contains(e.target)) closeTaxonDropdown();
+    if (!wrap.contains(e.target) && !dropdown.contains(e.target)) closeTaxonDropdown();
   });
+
+  // position:fixed coordinates are computed once, on open — if the page (or
+  // window) scrolls/resizes while it's open, just close it rather than
+  // tracking and repositioning on every scroll event.
+  window.addEventListener('scroll', closeTaxonDropdown, true);
+  window.addEventListener('resize', closeTaxonDropdown);
 
   document.getElementById('taxon-active-pick-clear').addEventListener('click', clearAdhocTaxon);
 }

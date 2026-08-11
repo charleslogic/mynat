@@ -129,7 +129,6 @@
             <span class="taxon-active-pick-label"></span>
             <button type="button" id="taxon-active-pick-clear" title="Clear">✕</button>
           </div>
-          <div class="taxon-search-dropdown" id="taxon-search-dropdown"></div>
         </div>
         <span class="filterbar-label" id="quick-picks-label" style="display:none">Quick picks:</span>
         <div class="filterbar-chips" id="filterbar-shortcuts"></div>
@@ -220,6 +219,15 @@
       <button class="btn-primary" id="gallery-load-more-btn" style="display:none">Load more</button>
     </div>
   </div>
+
+  <!-- Taxon search results — a top-level element (position:fixed, coordinates
+       computed via JS from #taxon-search-input's position), not nested inside
+       .taxon-search/.filterbar-row. .filterbar-row has overflow-x:auto, which
+       forces overflow-y:auto too (CSS won't let one axis be auto and the
+       other visible) — nested here, that clipped/scrolled the dropdown
+       inside the row's own ~37px height instead of letting it float over
+       the page below. Living outside #app entirely sidesteps that. -->
+  <div class="taxon-search-dropdown" id="taxon-search-dropdown"></div>
 
   <!-- Supabase auth — module script (deferred, runs after DOM ready).
        Library is SELF-HOSTED (supabase.umd.js, classic script below) and precached by
