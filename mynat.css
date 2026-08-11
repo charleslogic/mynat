@@ -43,9 +43,19 @@ body.light {
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* height:100dvh (not plain %/vh) because iOS Safari's chrome can show/hide
+   during scroll (and behaves similarly across the standalone-PWA/regular-tab
+   boundary this app gets used in both ways), and 100%/100vh don't track that
+   — they lock in whichever viewport size was live at layout time, leaving a
+   gap of plain background at the bottom once the chrome state changes.
+   100dvh is the unit built specifically to track the *current* visible
+   viewport instead. Plain height:100% stays first as a fallback for browsers
+   without dvh support (invalid values are ignored, not fatal, so older
+   browsers just keep this line and never see the dvh override). */
 html, body {
   margin: 0;
   height: 100%;
+  height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font-family: 'DM Sans', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -60,7 +70,7 @@ html, body {
    #app below relies on a definite-height ancestor chain for its own
    height:100% (a fixed-viewport app shell, unlike hab's normal scrolling
    page). box-sizing:border-box (set globally above) keeps this padding
-   inside that 100% budget rather than adding to it. */
+   inside that 100dvh budget rather than adding to it. */
 body {
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);

@@ -398,6 +398,18 @@ Fixed by making `#tab-overview.active` specifically (not the other tabs) a cente
 inherited from `.tabpanel`, so it still scrolls normally if content ever does exceed the
 viewport.
 
+**Same-looking gap turned out to be on every tab, not just Overview** — including List, which
+has 1680 items and is nowhere near "too short," ruling out a per-tab content-length explanation.
+Root cause: `html`/`body` used plain `height: 100%`, which iOS Safari doesn't reliably keep in
+sync with the *actual* visible viewport as its chrome shows/hides (well-documented, long-standing
+mobile Safari pain point — `100%`/`100vh` lock in whichever viewport size was live at layout
+time). Switched to `height: 100dvh` (the unit purpose-built to track the current visible
+viewport), with the original `height: 100%` kept as the first declaration so browsers without
+`dvh` support fall back to it instead of getting an invalid rule. Diagnosed from the pattern
+across screenshots (not independently reproduced — desktop Chrome doesn't have Safari's
+chrome-collapse behavior to test against) — flagged as the most likely explanation rather than a
+confirmed root cause; worth another round of device screenshots to confirm.
+
 ## Build Status
 
 All 6 of the dev plan's core + refinement phases complete, plus a first pass at Phase 7 polish
